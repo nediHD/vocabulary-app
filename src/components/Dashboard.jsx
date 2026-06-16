@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function Dashboard({ setView }) {
+export default function Dashboard({ setView, setInSession }) {
   const [stats, setStats] = useState({
     total: 0,
     learning: 0,

@@ -6,6 +6,7 @@ import ReviewSession from './components/ReviewSession'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
+  const [inSession, setInSession] = useState(false)
 
   const navItems = [
     { id: 'dashboard', label: 'Übersicht' },
@@ -17,15 +18,15 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'dashboard':
-        return <Dashboard setView={setView} />
+        return <Dashboard setView={setView} setInSession={setInSession} />
       case 'words':
         return <ManageWords />
       case 'learning':
-        return <LearningSession setView={setView} />
+        return <LearningSession setView={setView} setInSession={setInSession} />
       case 'review':
-        return <ReviewSession setView={setView} />
+        return <ReviewSession setView={setView} setInSession={setInSession} />
       default:
-        return <Dashboard setView={setView} />
+        return <Dashboard setView={setView} setInSession={setInSession} />
     }
   }
 
@@ -42,6 +43,7 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => setView(item.id)}
+                  disabled={inSession}
                   className={`pb-3 text-sm font-medium transition-colors ${
                     view === item.id
                       ? 'border-b-2'
@@ -49,7 +51,9 @@ export default function App() {
                   }`}
                   style={{
                     borderBottomColor: view === item.id ? 'var(--blue)' : 'transparent',
-                    color: view === item.id ? 'var(--ink)' : 'var(--ink-soft)',
+                    color: inSession ? 'var(--ink-faint)' : (view === item.id ? 'var(--ink)' : 'var(--ink-soft)'),
+                    cursor: inSession ? 'not-allowed' : 'pointer',
+                    opacity: inSession ? 0.5 : 1,
                   }}
                 >
                   {item.label}
@@ -63,10 +67,13 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
+                disabled={inSession}
                 className="px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-colors"
                 style={{
-                  backgroundColor: view === item.id ? 'var(--blue)' : 'var(--line-soft)',
-                  color: view === item.id ? '#ffffff' : 'var(--ink-soft)',
+                  backgroundColor: inSession ? 'var(--line-soft)' : (view === item.id ? 'var(--blue)' : 'var(--line-soft)'),
+                  color: inSession ? 'var(--ink-faint)' : (view === item.id ? '#ffffff' : 'var(--ink-soft)'),
+                  cursor: inSession ? 'not-allowed' : 'pointer',
+                  opacity: inSession ? 0.5 : 1,
                 }}
               >
                 {item.label}

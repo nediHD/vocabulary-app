@@ -16,7 +16,7 @@ function shuffle(array) {
   return arr
 }
 
-export default function LearningSession({ setView }) {
+export default function LearningSession({ setView, setInSession }) {
   const [queue, setQueue] = useState([])
   const [currentIdx, setCurrentIdx] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -26,7 +26,9 @@ export default function LearningSession({ setView }) {
   const [direction, setDirection] = useState('de→fr')
 
   useEffect(() => {
+    setInSession(true)
     loadCards()
+    return () => setInSession(false)
   }, [])
 
   const loadCards = async () => {
@@ -48,7 +50,8 @@ export default function LearningSession({ setView }) {
       }
 
       const shuffled = shuffle(data)
-      setQueue(shuffled)
+      const limited = shuffled.slice(0, 15)
+      setQueue(limited)
       setDirection(getRandomDirection())
     } catch (err) {
       console.error('Error:', err)
@@ -84,7 +87,10 @@ export default function LearningSession({ setView }) {
         <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Sitzung abgeschlossen! 🎉</h2>
         <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Lernen!</p>
         <button
-          onClick={() => setView('dashboard')}
+          onClick={() => {
+            setInSession(false)
+            setView('dashboard')
+          }}
           className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
           style={{ backgroundColor: 'var(--blue)' }}
           onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
@@ -172,6 +178,7 @@ export default function LearningSession({ setView }) {
 
   const handleStop = () => {
     if (confirm('Sitzung beenden?')) {
+      setInSession(false)
       setView('dashboard')
     }
   }
