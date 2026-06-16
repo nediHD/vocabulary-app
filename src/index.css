@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --surface-2: #fbfcfd;
+    --ink: #1b2230;
+    --ink-soft: #59616f;
+    --ink-faint: #8b919c;
+    --line: #e6e8ec;
+    --line-soft: #eef0f2;
+    --blue: #2f6df0;
+    --blue-dark: #1f57d6;
+    --blue-tint: #eef3fe;
+    --blue-tint-line: #d6e4ff;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background-color: var(--bg);
+    color: var(--ink);
+  }
+}
