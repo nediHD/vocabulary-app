@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { reinsert } from '../utils/queue'
+import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
 function getRandomDirection() {
@@ -18,13 +18,12 @@ function shuffle(array) {
 
 export default function LearningSession({ setView, setInSession }) {
   const [queue, setQueue] = useState([])
-  const [currentIdx, setCurrentIdx] = useState(0)
   const [loading, setLoading] = useState(true)
   const [finished, setFinished] = useState(false)
   const [userAnswer, setUserAnswer] = useState('')
   const [phase, setPhase] = useState('input')
   const [direction, setDirection] = useState('de→fr')
-  const [correctCount, setCorrectCount] = useState(0)
+  const [pills, setPills] = useState([])
   const [sessionSize, setSessionSize] = useState(0)
 
   useEffect(() => {
@@ -55,7 +54,8 @@ export default function LearningSession({ setView, setInSession }) {
       const limited = shuffled.slice(0, 15)
       setQueue(limited)
       setSessionSize(limited.length)
-      setCorrectCount(0)
+      const initialPills = limited.map(card => ({ id: card.id, color: 'gray' }))
+      setPills(initialPills)
       setDirection(getRandomDirection())
     } catch (err) {
       console.error('Error:', err)
@@ -106,7 +106,11 @@ export default function LearningSession({ setView, setInSession }) {
     )
   }
 
-  const card = queue[currentIdx]
+  if (queue.length === 0) {
+    return null
+  }
+
+  const card = queue[0]
 
   const handleReveal = () => {
     setPhase('reveal')
@@ -114,12 +118,15 @@ export default function LearningSession({ setView, setInSession }) {
 
   const handleGrade = async (result) => {
     try {
+      const card = queue[0]
+      const newPills = [...pills]
+      const pillIdx = newPills.findIndex(p => p.id === card.id)
+
       if (result === 'gewusst') {
-        setCorrectCount(correctCount + 1)
         const newCount = card.learning_correct_count + 1
 
         if (newCount >= 2) {
-          // Graduate to review
+          // Graduate to review - dunkelgrün + entfernen
           const nextReviewAt = new Date()
           nextReviewAt.setDate(nextReviewAt.getDate() + 1)
 
@@ -133,44 +140,49 @@ export default function LearningSession({ setView, setInSession }) {
             })
             .eq('id', card.id)
 
-          // Remove from queue
-          const newQueue = queue.filter((_, i) => i !== currentIdx)
+          newPills[pillIdx].color = 'dark-green'
+          setPills(newPills)
+
+          const newQueue = queue.slice(1)
           setQueue(newQueue)
 
-          if (currentIdx >= newQueue.length) {
+          if (newQueue.length === 0) {
             setFinished(true)
           } else {
-            setCurrentIdx(0)
             setDirection(getRandomDirection())
             setPhase('input')
             setUserAnswer('')
           }
         } else {
-          // Reinsert with incremented count
+          // 1x Gewusst - hellgrün + ans Ende
           await supabase
             .from('cards')
             .update({ learning_correct_count: newCount })
             .eq('id', card.id)
 
+          newPills[pillIdx].color = 'light-green'
+          setPills(newPills)
+
           const updatedCard = { ...card, learning_correct_count: newCount }
-          const newQueue = reinsert(queue, updatedCard, currentIdx)
+          const newQueue = reinsertAt(queue.slice(1), updatedCard, null)
           setQueue(newQueue)
-          setCurrentIdx(currentIdx + 1)
           setDirection(getRandomDirection())
           setPhase('input')
           setUserAnswer('')
         }
       } else {
-        // nicht_gewusst - counter does NOT increment
+        // nicht_gewusst - rot + 3 Positionen vor
         await supabase
           .from('cards')
           .update({ learning_correct_count: 0 })
           .eq('id', card.id)
 
+        newPills[pillIdx].color = 'red'
+        setPills(newPills)
+
         const updatedCard = { ...card, learning_correct_count: 0 }
-        const newQueue = reinsert(queue, updatedCard, currentIdx)
+        const newQueue = reinsertAt(queue.slice(1), updatedCard, 3)
         setQueue(newQueue)
-        setCurrentIdx(currentIdx + 1)
         setDirection(getRandomDirection())
         setPhase('input')
         setUserAnswer('')
@@ -192,7 +204,8 @@ export default function LearningSession({ setView, setInSession }) {
     <QuizCard
       word={card}
       direction={direction}
-      correctCount={correctCount}
+      pills={pills}
+      currentCardId={card.id}
       sessionSize={sessionSize}
       phase={phase}
       userAnswer={userAnswer}

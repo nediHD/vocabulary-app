@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { reinsert } from '../utils/queue'
+import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
 function getRandomDirection() {
@@ -18,14 +18,13 @@ function shuffle(array) {
 
 export default function ReviewSession({ setView, setInSession }) {
   const [queue, setQueue] = useState([])
-  const [currentIdx, setCurrentIdx] = useState(0)
   const [loading, setLoading] = useState(true)
   const [finished, setFinished] = useState(false)
   const [sessionNotStarted, setSessionNotStarted] = useState(false)
   const [userAnswer, setUserAnswer] = useState('')
   const [phase, setPhase] = useState('input')
   const [direction, setDirection] = useState('de→fr')
-  const [correctCount, setCorrectCount] = useState(0)
+  const [pills, setPills] = useState([])
   const [sessionSize, setSessionSize] = useState(0)
 
   useEffect(() => {
@@ -63,7 +62,8 @@ export default function ReviewSession({ setView, setInSession }) {
       const limited = shuffled.slice(0, 15)
       setQueue(limited)
       setSessionSize(limited.length)
-      setCorrectCount(0)
+      const initialPills = limited.map(card => ({ id: card.id, color: 'gray' }))
+      setPills(initialPills)
       setDirection(getRandomDirection())
     } catch (err) {
       console.error('Error:', err)
@@ -134,7 +134,11 @@ export default function ReviewSession({ setView, setInSession }) {
     )
   }
 
-  const card = queue[currentIdx]
+  if (queue.length === 0) {
+    return null
+  }
+
+  const card = queue[0]
 
   const handleReveal = () => {
     setPhase('reveal')
@@ -142,9 +146,12 @@ export default function ReviewSession({ setView, setInSession }) {
 
   const handleGrade = async (result) => {
     try {
+      const card = queue[0]
+      const newPills = [...pills]
+      const pillIdx = newPills.findIndex(p => p.id === card.id)
+
       if (result === 'gewusst') {
-        setCorrectCount(correctCount + 1)
-        // Double interval
+        // Dunkelgrün + entfernen
         const newInterval = card.interval_days * 2
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
@@ -157,22 +164,21 @@ export default function ReviewSession({ setView, setInSession }) {
           })
           .eq('id', card.id)
 
-        // Remove from queue
-        const newQueue = queue.filter((_, i) => i !== currentIdx)
+        newPills[pillIdx].color = 'dark-green'
+        setPills(newPills)
+
+        const newQueue = queue.slice(1)
         setQueue(newQueue)
 
-        if (currentIdx >= newQueue.length) {
+        if (newQueue.length === 0) {
           setFinished(true)
         } else {
-          // Adjust currentIdx if necessary
-          const nextIdx = Math.min(currentIdx, newQueue.length - 1)
-          setCurrentIdx(nextIdx)
           setDirection(getRandomDirection())
           setPhase('input')
           setUserAnswer('')
         }
       } else {
-        // nicht_gewusst: counter does NOT increment
+        // Rot + 3 Positionen vor
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + 1)
 
@@ -184,14 +190,16 @@ export default function ReviewSession({ setView, setInSession }) {
           })
           .eq('id', card.id)
 
+        newPills[pillIdx].color = 'red'
+        setPills(newPills)
+
         const updatedCard = {
           ...card,
           interval_days: 1,
           next_review_at: nextReviewAt.toISOString(),
         }
-        const newQueue = reinsert(queue, updatedCard, currentIdx)
+        const newQueue = reinsertAt(queue.slice(1), updatedCard, 3)
         setQueue(newQueue)
-        setCurrentIdx(currentIdx + 1)
         setDirection(getRandomDirection())
         setPhase('input')
         setUserAnswer('')
@@ -213,7 +221,8 @@ export default function ReviewSession({ setView, setInSession }) {
     <QuizCard
       word={card}
       direction={direction}
-      correctCount={correctCount}
+      pills={pills}
+      currentCardId={card.id}
       sessionSize={sessionSize}
       phase={phase}
       userAnswer={userAnswer}

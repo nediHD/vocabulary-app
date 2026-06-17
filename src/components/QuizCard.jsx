@@ -1,7 +1,8 @@
 export default function QuizCard({
   word,
   direction,
-  correctCount,
+  pills,
+  currentCardId,
   sessionSize,
   phase,
   userAnswer,
@@ -40,21 +41,32 @@ export default function QuizCard({
         </button>
 
         {/* 15 pills */}
-        <div className="flex flex-1 gap-1">
-          {Array.from({ length: sessionSize }).map((_, i) => (
-            <div
-              key={i}
-              className="flex-1 h-2 rounded-full transition-colors"
-              style={{
-                backgroundColor: i < correctCount ? '#22c55e' : 'var(--line)',
-              }}
-            />
-          ))}
+        <div className="flex flex-1 gap-1 items-center">
+          {pills.map((pill) => {
+            let bgColor = 'var(--line)'
+            if (pill.color === 'red') bgColor = '#ef4444'
+            if (pill.color === 'light-green') bgColor = '#86efac'
+            if (pill.color === 'dark-green') bgColor = '#16a34a'
+
+            const isCurrent = pill.id === currentCardId
+
+            return (
+              <div
+                key={pill.id}
+                className="flex-1 h-2 rounded-full transition-all"
+                style={{
+                  backgroundColor: bgColor,
+                  outline: isCurrent ? '2px solid var(--blue)' : 'none',
+                  outlineOffset: '4px',
+                }}
+              />
+            )
+          })}
         </div>
 
         {/* Counter */}
         <div className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--ink-faint)' }}>
-          {correctCount} / {sessionSize}
+          {pills.filter(p => p.color === 'dark-green').length} / {sessionSize}
         </div>
       </div>
 
