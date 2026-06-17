@@ -1,8 +1,8 @@
 export default function QuizCard({
   word,
   direction,
-  totalCards,
-  currentIndex,
+  correctCount,
+  sessionSize,
   phase,
   userAnswer,
   onAnswerChange,
@@ -25,31 +25,36 @@ export default function QuizCard({
       ? 'Deutsch → Französisch'
       : 'Französisch → Deutsch'
 
-  const progress = ((currentIndex + 1) / totalCards) * 100
-
   return (
     <div className="mx-auto max-w-2xl">
-      {/* Header with progress */}
+      {/* Header with 15-pill progress bar */}
       <div className="mb-8 flex items-center gap-4">
         <button
           onClick={onStop}
-          className="text-sm font-medium transition-colors"
+          className="text-sm font-medium transition-colors whitespace-nowrap"
           style={{ color: 'var(--ink-soft)' }}
           onMouseEnter={e => e.target.style.color = 'var(--ink)'}
           onMouseLeave={e => e.target.style.color = 'var(--ink-soft)'}
         >
-          ← Sitzung beenden
+          ← Beenden
         </button>
-        <div className="flex-1">
-          <div className="mb-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--line)' }}>
+
+        {/* 15 pills */}
+        <div className="flex flex-1 gap-1">
+          {Array.from({ length: sessionSize }).map((_, i) => (
             <div
-              className="h-full transition-all duration-300"
-              style={{ width: `${progress}%`, backgroundColor: 'var(--blue)' }}
-            ></div>
-          </div>
+              key={i}
+              className="flex-1 h-2 rounded-full transition-colors"
+              style={{
+                backgroundColor: i < correctCount ? '#22c55e' : 'var(--line)',
+              }}
+            />
+          ))}
         </div>
-        <div className="font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>
-          {currentIndex + 1} / {totalCards}
+
+        {/* Counter */}
+        <div className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--ink-faint)' }}>
+          {correctCount} / {sessionSize}
         </div>
       </div>
 

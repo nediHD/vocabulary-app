@@ -24,6 +24,8 @@ export default function LearningSession({ setView, setInSession }) {
   const [userAnswer, setUserAnswer] = useState('')
   const [phase, setPhase] = useState('input')
   const [direction, setDirection] = useState('de→fr')
+  const [correctCount, setCorrectCount] = useState(0)
+  const [sessionSize, setSessionSize] = useState(0)
 
   useEffect(() => {
     setInSession(true)
@@ -52,6 +54,8 @@ export default function LearningSession({ setView, setInSession }) {
       const shuffled = shuffle(data)
       const limited = shuffled.slice(0, 15)
       setQueue(limited)
+      setSessionSize(limited.length)
+      setCorrectCount(0)
       setDirection(getRandomDirection())
     } catch (err) {
       console.error('Error:', err)
@@ -111,6 +115,7 @@ export default function LearningSession({ setView, setInSession }) {
   const handleGrade = async (result) => {
     try {
       if (result === 'gewusst') {
+        setCorrectCount(correctCount + 1)
         const newCount = card.learning_correct_count + 1
 
         if (newCount >= 2) {
@@ -156,7 +161,7 @@ export default function LearningSession({ setView, setInSession }) {
           setUserAnswer('')
         }
       } else {
-        // nicht_gewusst
+        // nicht_gewusst - counter does NOT increment
         await supabase
           .from('cards')
           .update({ learning_correct_count: 0 })
@@ -187,8 +192,8 @@ export default function LearningSession({ setView, setInSession }) {
     <QuizCard
       word={card}
       direction={direction}
-      totalCards={queue.length}
-      currentIndex={currentIdx}
+      correctCount={correctCount}
+      sessionSize={sessionSize}
       phase={phase}
       userAnswer={userAnswer}
       onAnswerChange={setUserAnswer}

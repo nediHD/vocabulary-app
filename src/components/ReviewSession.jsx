@@ -25,6 +25,8 @@ export default function ReviewSession({ setView, setInSession }) {
   const [userAnswer, setUserAnswer] = useState('')
   const [phase, setPhase] = useState('input')
   const [direction, setDirection] = useState('de→fr')
+  const [correctCount, setCorrectCount] = useState(0)
+  const [sessionSize, setSessionSize] = useState(0)
 
   useEffect(() => {
     setInSession(true)
@@ -60,6 +62,8 @@ export default function ReviewSession({ setView, setInSession }) {
       const shuffled = shuffle(dueCards)
       const limited = shuffled.slice(0, 15)
       setQueue(limited)
+      setSessionSize(limited.length)
+      setCorrectCount(0)
       setDirection(getRandomDirection())
     } catch (err) {
       console.error('Error:', err)
@@ -139,6 +143,7 @@ export default function ReviewSession({ setView, setInSession }) {
   const handleGrade = async (result) => {
     try {
       if (result === 'gewusst') {
+        setCorrectCount(correctCount + 1)
         // Double interval
         const newInterval = card.interval_days * 2
         const nextReviewAt = new Date()
@@ -167,7 +172,7 @@ export default function ReviewSession({ setView, setInSession }) {
           setUserAnswer('')
         }
       } else {
-        // nicht_gewusst: reset to 1 day
+        // nicht_gewusst: counter does NOT increment
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + 1)
 
@@ -208,8 +213,8 @@ export default function ReviewSession({ setView, setInSession }) {
     <QuizCard
       word={card}
       direction={direction}
-      totalCards={queue.length}
-      currentIndex={currentIdx}
+      correctCount={correctCount}
+      sessionSize={sessionSize}
       phase={phase}
       userAnswer={userAnswer}
       onAnswerChange={setUserAnswer}
