@@ -59,7 +59,11 @@ export default function ReviewSession({ setView, setInSession }) {
       }
 
       const shuffled = shuffle(dueCards)
-      const limited = shuffled.slice(0, 15)
+      const limited = shuffled.slice(0, 15).map(c => ({
+        ...c,
+        _correctCount: 0,
+        _hadError: false,
+      }))
       setQueue(limited)
       setSessionSize(limited.length)
       const initialPills = limited.map(card => ({ id: card.id, color: 'gray' }))
@@ -151,34 +155,58 @@ export default function ReviewSession({ setView, setInSession }) {
       const pillIdx = newPills.findIndex(p => p.id === card.id)
 
       if (result === 'gewusst') {
-        // Dunkelgrün + entfernen
-        const newInterval = card.interval_days * 2
-        const nextReviewAt = new Date()
-        nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
+        // Bestimme wie viele Gewusst nötig sind: 2 wenn Fehler, sonst 1
+        const needed = card._hadError ? 2 : 1
+        const newCount = card._correctCount + 1
 
-        await supabase
-          .from('cards')
-          .update({
-            interval_days: newInterval,
-            next_review_at: nextReviewAt.toISOString(),
-          })
-          .eq('id', card.id)
+        if (newCount >= needed) {
+          // Fertig - dunkelgrün + entfernen
+          newPills[pillIdx].color = 'dark-green'
+          setPills(newPills)
 
-        newPills[pillIdx].color = 'dark-green'
-        setPills(newPills)
+          // Nur bei fehlerfreien Karten: Interval verdoppeln
+          if (!card._hadError) {
+            const newInterval = card.interval_days * 2
+            const nextReviewAt = new Date()
+            nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
 
-        const newQueue = queue.slice(1)
-        setQueue(newQueue)
+            await supabase
+              .from('cards')
+              .update({
+                interval_days: newInterval,
+                next_review_at: nextReviewAt.toISOString(),
+              })
+              .eq('id', card.id)
+          }
+          // Bei Fehler: Supabase wurde schon bei "nicht_gewusst" gesetzt, kein Update nötig
 
-        if (newQueue.length === 0) {
-          setFinished(true)
+          const newQueue = queue.slice(1)
+          setQueue(newQueue)
+
+          if (newQueue.length === 0) {
+            setFinished(true)
+          } else {
+            setDirection(getRandomDirection())
+            setPhase('input')
+            setUserAnswer('')
+          }
         } else {
+          // Nach Fehler: 1x Gewusst, braucht noch 1x - hellgrün + ans Ende
+          newPills[pillIdx].color = 'light-green'
+          setPills(newPills)
+
+          const updatedCard = {
+            ...card,
+            _correctCount: newCount,
+          }
+          const newQueue = reinsertAt(queue.slice(1), updatedCard, null)
+          setQueue(newQueue)
           setDirection(getRandomDirection())
           setPhase('input')
           setUserAnswer('')
         }
       } else {
-        // Rot + 3 Positionen vor
+        // Nicht gewusst - rot + 3 Positionen vor + Fehler-Flag setzen
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + 1)
 
@@ -197,6 +225,8 @@ export default function ReviewSession({ setView, setInSession }) {
           ...card,
           interval_days: 1,
           next_review_at: nextReviewAt.toISOString(),
+          _correctCount: 0,
+          _hadError: true,
         }
         const newQueue = reinsertAt(queue.slice(1), updatedCard, 3)
         setQueue(newQueue)
