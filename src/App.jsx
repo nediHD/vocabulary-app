@@ -3,6 +3,7 @@ import Dashboard from './components/Dashboard'
 import ManageWords from './components/ManageWords'
 import LearningSession from './components/LearningSession'
 import ReviewSession from './components/ReviewSession'
+import SentenceLearning from './components/SentenceLearning'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
@@ -13,6 +14,7 @@ export default function App() {
     { id: 'words', label: 'Wörter verwalten' },
     { id: 'learning', label: 'Lernen' },
     { id: 'review', label: 'Wiederholen' },
+    { id: 'sentences', label: 'Sätze üben' },
   ]
 
   const renderView = () => {
@@ -25,6 +27,8 @@ export default function App() {
         return <LearningSession setView={setView} setInSession={setInSession} />
       case 'review':
         return <ReviewSession setView={setView} setInSession={setInSession} />
+      case 'sentences':
+        return <SentenceLearning setView={setView} setInSession={setInSession} />
       default:
         return <Dashboard setView={setView} setInSession={setInSession} />
     }
