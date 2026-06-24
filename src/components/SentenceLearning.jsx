@@ -23,8 +23,6 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [userWord2, setUserWord2] = useState('')
   const [pills, setPills] = useState([])
   const [sessionSize, setSessionSize] = useState(0)
-  const [round, setRound] = useState('fr-de')
-  const [betweenRounds, setBetweenRounds] = useState(false)
 
   useEffect(() => {
     setInSession(true)
@@ -111,25 +109,6 @@ export default function SentenceLearning({ setView, setInSession }) {
     )
   }
 
-  if (betweenRounds) {
-    return (
-      <div className="mx-auto max-w-2xl text-center py-20">
-        <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Runde 1 abgeschlossen! ✅</h2>
-        <p className="mb-2 text-lg" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Übersetzen!</p>
-        <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Jetzt üben wir die gleichen Sätze in die andere Richtung.</p>
-        <button
-          onClick={startRound2}
-          className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-          style={{ backgroundColor: 'var(--blue)' }}
-          onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-          onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-        >
-          Runde 2 starten →
-        </button>
-      </div>
-    )
-  }
-
   if (finished) {
     return (
       <div className="mx-auto max-w-2xl text-center py-20">
@@ -176,35 +155,15 @@ export default function SentenceLearning({ setView, setInSession }) {
     newPills[currentIdx].color = 'dark-green'
     setPills(newPills)
 
-    if (round === 'fr-de') {
-      if (currentIdx + 1 >= sentences.length) {
-        setBetweenRounds(true)
-      } else {
-        setCurrentIdx(currentIdx + 1)
-        setPhase('translate')
-        setUserTranslation('')
-        setUserWord1('')
-        setUserWord2('')
-      }
+    if (currentIdx + 1 >= sentences.length) {
+      setFinished(true)
     } else {
-      if (currentIdx + 1 >= sentences.length) {
-        setFinished(true)
-      } else {
-        setCurrentIdx(currentIdx + 1)
-        setPhase('de-translate')
-        setUserTranslation('')
-      }
+      setCurrentIdx(currentIdx + 1)
+      setPhase('translate')
+      setUserTranslation('')
+      setUserWord1('')
+      setUserWord2('')
     }
-  }
-
-  const startRound2 = () => {
-    setRound('de-fr')
-    setBetweenRounds(false)
-    setCurrentIdx(0)
-    setUserTranslation('')
-    setPhase('de-translate')
-    const resetPills = sentences.map((_, i) => ({ id: i, color: 'gray' }))
-    setPills(resetPills)
   }
 
   return (
@@ -220,11 +179,6 @@ export default function SentenceLearning({ setView, setInSession }) {
         >
           ← Beenden
         </button>
-
-        {/* Round indicator */}
-        <span className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--ink-faint)' }}>
-          {round === 'fr-de' ? 'FR → DE' : 'DE → FR'}
-        </span>
 
         {/* Pills */}
         <div className="flex flex-1 gap-1 items-center">
@@ -250,9 +204,6 @@ export default function SentenceLearning({ setView, setInSession }) {
         </div>
       </div>
 
-      {round === 'fr-de' ? (
-        // Runde 1: FR → DE
-        <>
       {phase === 'translate' ? (
         <div className="flex flex-col items-center justify-center py-12 sm:py-20">
           <div className="mb-8 text-center">
@@ -447,103 +398,6 @@ export default function SentenceLearning({ setView, setInSession }) {
             </button>
           </div>
         </div>
-      )}
-        </>
-      ) : (
-        // Runde 2: DE → FR
-        <>
-      {phase === 'de-translate' ? (
-        <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <div className="mb-4 text-lg sm:text-xl" style={{ color: 'var(--ink)' }}>
-              {current.german.split(' ').map((word, i) => {
-                const isFocusWord =
-                  word.toLowerCase().includes(current.word1.german.toLowerCase()) ||
-                  (current.word2 && word.toLowerCase().includes(current.word2.german.toLowerCase()))
-                return (
-                  <span key={i}>
-                    <span style={{ fontWeight: isFocusWord ? 'bold' : 'normal' }}>{word}</span>
-                    {i < current.german.split(' ').length - 1 ? ' ' : ''}
-                  </span>
-                )
-              })}
-            </div>
-            <div style={{ color: 'var(--ink-soft)' }} className="text-sm">
-              Übersetze diesen Satz ins Französische:
-            </div>
-          </div>
-          <input
-            type="text"
-            placeholder="Antworte hier..."
-            value={userTranslation}
-            onChange={e => setUserTranslation(e.target.value)}
-            onKeyPress={e => e.key === 'Enter' && setPhase('de-reveal')}
-            className="mb-6 w-full max-w-sm rounded-2xl border-2 px-4 py-4 text-center font-sans text-lg outline-none"
-            style={{
-              borderColor: 'var(--blue)',
-              backgroundColor: 'white',
-              color: 'var(--ink)',
-            }}
-            autoFocus
-          />
-          <button
-            onClick={() => setPhase('de-reveal')}
-            className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-          >
-            Aufdecken
-          </button>
-        </div>
-      ) : phase === 'de-reveal' ? (
-        <div className="flex flex-col items-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <div className="text-lg sm:text-xl" style={{ color: 'var(--ink)' }}>
-              {current.german.split(' ').map((word, i) => {
-                const isFocusWord =
-                  word.toLowerCase().includes(current.word1.german.toLowerCase()) ||
-                  (current.word2 && word.toLowerCase().includes(current.word2.german.toLowerCase()))
-                return (
-                  <span key={i}>
-                    <span style={{ fontWeight: isFocusWord ? 'bold' : 'normal' }}>{word}</span>
-                    {i < current.german.split(' ').length - 1 ? ' ' : ''}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Answer Comparison */}
-          <div className="mb-12 flex w-full flex-col gap-4 sm:flex-row max-w-2xl">
-            <div className="flex-1 rounded-2xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
-              <div className="mb-1 font-mono text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-                Deine Übersetzung
-              </div>
-              <div className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>{userTranslation}</div>
-            </div>
-            <div className="flex-1 rounded-2xl border p-5" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
-              <div className="mb-1 font-mono text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
-                Richtige Übersetzung
-              </div>
-              <div className="text-lg font-semibold" style={{ color: 'var(--blue-dark)' }}>
-                {current.french}
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleNext}
-            className="w-full max-w-2xl rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-          >
-            Weiter
-          </button>
-        </div>
-      ) : null}
-        </>
       )}
     </div>
   )
