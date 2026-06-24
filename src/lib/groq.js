@@ -1,7 +1,7 @@
 export async function generateSentence(word1, word2) {
   const prompt = word2
-    ? `Erstelle einen einfachen französischen Satz (max. 15 Wörter) mit diesen zwei Wörtern: "${word1.french}" (bedeutet: ${word1.german}) und "${word2.french}" (bedeutet: ${word2.german}). Antworte NUR mit JSON: {"french": "...", "german": "..."}`
-    : `Erstelle einen einfachen französischen Satz (max. 15 Wörter) mit dem Wort "${word1.french}" (bedeutet: ${word1.german}). Antworte NUR mit JSON: {"french": "...", "german": "..."}`
+    ? `Schreibe einen kurzen zusammenhängenden französischen Text (2-5 Sätze) in dem die Wörter "${word1.french}" (= ${word1.german}) und "${word2.french}" (= ${word2.german}) natürlich vorkommen. Die Wörter müssen nicht im gleichen Satz sein. Antworte NUR mit JSON: {"french": "...", "german": "..."}`
+    : `Schreibe einen kurzen zusammenhängenden französischen Text (2-5 Sätze) in dem das Wort "${word1.french}" (= ${word1.german}) natürlich vorkommt. Antworte NUR mit JSON: {"french": "...", "german": "..."}`
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',

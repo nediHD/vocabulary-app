@@ -206,8 +206,8 @@ export default function SentenceLearning({ setView, setInSession }) {
 
       {phase === 'translate' ? (
         <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <div className="mb-4 text-lg sm:text-xl" style={{ color: 'var(--ink)' }}>
+          <div className="mb-8 text-left max-w-2xl">
+            <div className="mb-4 text-base leading-relaxed" style={{ color: 'var(--ink)' }}>
               {current.french.split(' ').map((word, i) => {
                 const isFocusWord =
                   word.toLowerCase().includes(current.word1.french.toLowerCase()) ||
@@ -221,7 +221,7 @@ export default function SentenceLearning({ setView, setInSession }) {
               })}
             </div>
             <div style={{ color: 'var(--ink-soft)' }} className="text-sm">
-              Übersetze diesen Satz ins Deutsche:
+              Übersetze diesen Text ins Deutsche:
             </div>
           </div>
           <input
@@ -250,8 +250,8 @@ export default function SentenceLearning({ setView, setInSession }) {
         </div>
       ) : phase === 'reveal' ? (
         <div className="flex flex-col items-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <div className="text-lg sm:text-xl" style={{ color: 'var(--ink)' }}>
+          <div className="mb-8 text-left max-w-2xl">
+            <div className="text-base leading-relaxed" style={{ color: 'var(--ink)' }}>
               {current.french.split(' ').map((word, i) => {
                 const isFocusWord =
                   word.toLowerCase().includes(current.word1.french.toLowerCase()) ||
