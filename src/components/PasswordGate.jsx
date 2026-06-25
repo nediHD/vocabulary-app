@@ -5,7 +5,7 @@ export default function PasswordGate({ setAuthenticated }) {
   const [error, setError] = useState('')
 
   const handleSubmit = () => {
-    if (password === 'Ilinka123') {
+    if (password === 'Ilinka123.') {
       setAuthenticated(true)
       localStorage.setItem('appAuth', 'true')
     } else {
