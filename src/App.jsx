@@ -1,13 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import ManageWords from './components/ManageWords'
 import LearningSession from './components/LearningSession'
 import ReviewSession from './components/ReviewSession'
 import SentenceLearning from './components/SentenceLearning'
+import PasswordGate from './components/PasswordGate'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
   const [inSession, setInSession] = useState(false)
+  const [authenticated, setAuthenticated] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem('appAuth') === 'true') {
+      setAuthenticated(true)
+    }
+  }, [])
 
   const navItems = [
     { id: 'dashboard', label: 'Übersicht' },
@@ -32,6 +40,10 @@ export default function App() {
       default:
         return <Dashboard setView={setView} setInSession={setInSession} />
     }
+  }
+
+  if (!authenticated) {
+    return <PasswordGate setAuthenticated={setAuthenticated} />
   }
 
   return (
