@@ -3,15 +3,6 @@ import { supabase } from '../lib/supabase'
 import { groupWords, generateBatch } from '../lib/groq'
 import { textToSpeech } from '../lib/openai'
 
-function shuffle(array) {
-  const arr = [...array]
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
-}
-
 export default function SentenceLearning({ setView, setInSession }) {
   const [batches, setBatches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +54,7 @@ export default function SentenceLearning({ setView, setInSession }) {
         return
       }
 
-      const shuffled = shuffle(dueCards).slice(0, 15)
+      const shuffled = dueCards.slice(0, 15)
 
       setLoadingStep('Wörter werden gruppiert...')
       let groups = []
