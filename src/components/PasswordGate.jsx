@@ -5,7 +5,14 @@ export default function PasswordGate({ setAuthenticated }) {
   const [error, setError] = useState('')
 
   const handleSubmit = () => {
-    if (password === 'Ilinka123.') {
+    const correctPassword = import.meta.env.VITE_APP_PASSWORD
+
+    if (!correctPassword) {
+      setError('Passwort nicht konfiguriert. Prüfe .env Datei.')
+      return
+    }
+
+    if (password === correctPassword) {
       setAuthenticated(true)
       localStorage.setItem('appAuth', 'true')
     } else {
