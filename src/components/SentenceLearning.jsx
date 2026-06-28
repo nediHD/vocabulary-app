@@ -70,6 +70,7 @@ export default function SentenceLearning({ setView, setInSession }) {
       try {
         groups = await groupWords(shuffled)
       } catch (err) {
+        console.error('groupWords error:', err)
         setError('Fehler beim Gruppieren: ' + err.message)
         setLoading(false)
         return
@@ -113,7 +114,7 @@ export default function SentenceLearning({ setView, setInSession }) {
             audioUrl,
           })
         } catch (err) {
-          console.error(`Fehler bei Gruppe ${i + 1}:`, err.message)
+          console.error(`Fehler bei Gruppe ${i + 1}:`, err)
           failedGroups.push(i + 1)
         }
       }

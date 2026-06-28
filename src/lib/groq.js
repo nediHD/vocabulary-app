@@ -1,17 +1,28 @@
+function cleanJSON(str) {
+  // Uklanja markdown fence: ```json ... ``` ili ``` ... ```
+  let cleaned = str.trim()
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+  }
+  return cleaned.trim()
+}
+
 export async function groupWords(words) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Gruppiere diese französischen Wörter intelligent in thematisch zusammenhängende Gruppen mit 2-5 Wörtern pro Gruppe:
+  const prompt = `Gruppiere diese französischen Wörter intelligent in thematisch zusammenhängende Gruppen mit 2-5 Wörtern pro Gruppe. Verwende nur die französischen Wörter wie unten angegeben:
 
 ${wordList}
 
-Antworte NUR mit JSON. Beispiel format:
-{"groups": [["faire", "aller"], ["manger", "faim", "cuisiner"], ...]}
+WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
 
-Die Wörter können mehrfach vorkommen. Verwende die französischen Wörter wie oben angegeben.`
+Beispiel:
+{"groups": [["faire", "aller"], ["manger", "faim", "cuisiner"]]}
+
+Jetzt deine Antwort mit der obigen Liste:`
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -41,7 +52,8 @@ Die Wörter können mehrfach vorkommen. Verwende die französischen Wörter wie 
     if (!data?.choices?.[0]?.message?.content) {
       throw new Error('Groq: Ungültige Antwortstruktur')
     }
-    const parsed = JSON.parse(data.choices[0].message.content)
+    const cleanedContent = cleanJSON(data.choices[0].message.content)
+    const parsed = JSON.parse(cleanedContent)
     return parsed.groups
   } catch (err) {
     if (err.message.startsWith('Groq:')) {
@@ -60,20 +72,18 @@ export async function generateBatch(words) {
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe einen zusammenhängenden französischen Text (5-8 Sätze) in dem diese Wörter natürlich vorkommen:
+  const prompt = `Schreibe einen zusammenhängenden französischen Text (5-8 Sätze) mit diesen Wörtern:
 
 ${wordList}
 
-Die Wörter müssen nicht im gleichen Satz sein. Der Text sollte Sinn machen.
+Generiere auch Lückentext-Fragen. Für jedes Wort: ein Satz mit _____ und die richtige Antwort.
 
-Generiere auch Lückentext-Fragen. Für jedes Wort oben: ersetze es mit _____ in einem Satz und gib die richtige Antwort an.
+WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
 
-Beispiel für "faire":
-- Frage: "Je vais _____ les devoirs demain."
-- Antwort: "faire"
+Beispiel JSON Format:
+{"french": "Je vais faire les devoirs. C'est important pour aller à l'école.", "questions": [{"sentence": "Je vais _____ les devoirs demain.", "answer": "faire"}, {"sentence": "Je vais _____ à l'école.", "answer": "aller"}]}
 
-Antworte NUR mit JSON:
-{"french": "...", "questions": [{"sentence": "..._____...", "answer": "faire"}, ...]}`
+Jetzt deine Antwort:`
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -103,7 +113,8 @@ Antworte NUR mit JSON:
     if (!data?.choices?.[0]?.message?.content) {
       throw new Error('Groq: Ungültige Antwortstruktur')
     }
-    const parsed = JSON.parse(data.choices[0].message.content)
+    const cleanedContent = cleanJSON(data.choices[0].message.content)
+    const parsed = JSON.parse(cleanedContent)
     return parsed
   } catch (err) {
     if (err.message.startsWith('Groq:')) {
@@ -153,7 +164,8 @@ export async function generateSentence(word1, word2) {
     if (!data?.choices?.[0]?.message?.content) {
       throw new Error('Groq: Ungültige Antwortstruktur')
     }
-    return JSON.parse(data.choices[0].message.content)
+    const cleanedContent = cleanJSON(data.choices[0].message.content)
+    return JSON.parse(cleanedContent)
   } catch (err) {
     if (err.message.startsWith('Groq:')) {
       throw err
