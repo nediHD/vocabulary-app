@@ -341,8 +341,7 @@ export default function SentenceLearning({ setView, setInSession }) {
               <p style={{ color: 'var(--ink-soft)' }} className="text-sm mb-6">Keine Fragen für diesen Batch generiert.</p>
               <button
                 onClick={() => {
-                  setPhase('write')
-                  setWordWriteIdx(0)
+                  setPhase('review')
                   setUserInput('')
                   setRevealed(false)
                 }}
@@ -351,7 +350,7 @@ export default function SentenceLearning({ setView, setInSession }) {
                 onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                 onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
               >
-                Zu Wörter üben →
+                Zu Text + Audio →
               </button>
             </div>
           ) : questionIdx < current.questions.length ? (
@@ -441,8 +440,7 @@ export default function SentenceLearning({ setView, setInSession }) {
                         setUserInput('')
                         setRevealed(false)
                       } else {
-                        setPhase('write')
-                        setWordWriteIdx(0)
+                        setPhase('review')
                         setUserInput('')
                         setRevealed(false)
                       }
@@ -452,12 +450,86 @@ export default function SentenceLearning({ setView, setInSession }) {
                     onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                     onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
                   >
-                    {questionIdx + 1 < current.questions.length ? 'Nächste Frage' : 'Weiter: Wörter schreiben'}
+                    {questionIdx + 1 < current.questions.length ? 'Nächste Frage' : 'Weiter: Text + Audio'}
                   </button>
                 </>
               )}
             </>
           ) : null}
+        </div>
+      )}
+
+      {/* Phase: Review */}
+      {phase === 'review' && (
+        <div className="flex flex-col items-center py-12 sm:py-20">
+          <div className="mb-8 text-center">
+            <p style={{ color: 'var(--ink-soft)' }} className="text-sm">
+              Lese und höre den Text nochmal:
+            </p>
+          </div>
+
+          {/* Audio player */}
+          {current.audioUrl && (
+            <div className="mb-8 w-full max-w-2xl flex flex-col items-center gap-4">
+              <audio
+                src={current.audioUrl}
+                controls
+                style={{ width: '100%', maxWidth: '500px' }}
+                onPlay={() => setAudioPlaying(true)}
+                onEnded={() => setAudioPlaying(false)}
+              />
+            </div>
+          )}
+
+          {/* French text with highlighted keywords */}
+          <div
+            className="mb-10 w-full max-w-2xl rounded-2xl border p-6"
+            style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}
+          >
+            <div
+              className="mb-3 font-mono text-xs font-medium uppercase tracking-wider"
+              style={{ color: 'var(--ink-faint)' }}
+            >
+              Texte français
+            </div>
+            <div className="text-base leading-relaxed" style={{ color: 'var(--ink)' }}>
+              {current.french.split(' ').map((word, i) => {
+                const isKey = current.words.some(w =>
+                  word.toLowerCase().includes(w.french.toLowerCase())
+                )
+                return (
+                  <span key={i}>
+                    <span
+                      style={{
+                        fontWeight: isKey ? 'bold' : 'normal',
+                        color: isKey ? 'var(--blue)' : 'inherit',
+                      }}
+                    >
+                      {word}
+                    </span>
+                    {i < current.french.split(' ').length - 1 ? ' ' : ''}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Weiter button */}
+          <button
+            onClick={() => {
+              setPhase('write')
+              setWordWriteIdx(0)
+              setUserInput('')
+              setRevealed(false)
+              setAudioPlaying(false)
+            }}
+            className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+            style={{ backgroundColor: 'var(--blue)' }}
+            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+          >
+            Weiter: Wörter schreiben →
+          </button>
         </div>
       )}
 
@@ -500,7 +572,7 @@ export default function SentenceLearning({ setView, setInSession }) {
 
           <div className="flex w-full max-w-2xl gap-4">
             <button
-              onClick={() => setPhase('questions')}
+              onClick={() => setPhase('review')}
               className="flex-1 rounded-2xl border px-6 py-3.5 font-semibold transition-colors"
               style={{
                 borderColor: 'var(--line-soft)',

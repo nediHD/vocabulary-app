@@ -72,16 +72,18 @@ export async function generateBatch(words) {
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe einen zusammenhängenden französischen Text (5-8 Sätze) mit diesen Wörtern:
+  const prompt = `Schreibe einen zusammenhängenden französischen Text (6-10 Sätze) mit diesen Wörtern:
 
 ${wordList}
+
+WICHTIG: Jedes Wort muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Kontexten und Sätzen. Der Text sollte natürlich und sinnvoll klingen.
 
 Generiere auch Lückentext-Fragen. Für jedes Wort: ein Satz mit _____ und die richtige Antwort.
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
 
 Beispiel JSON Format:
-{"french": "Je vais faire les devoirs. C'est important pour aller à l'école.", "questions": [{"sentence": "Je vais _____ les devoirs demain.", "answer": "faire"}, {"sentence": "Je vais _____ à l'école.", "answer": "aller"}]}
+{"french": "Je vais faire les devoirs. C'est important faire mes études. Quand je fais le travail, je vais à l'école. Je vais faire de mon mieux.", "questions": [{"sentence": "Je vais _____ les devoirs demain.", "answer": "faire"}, {"sentence": "Je vais _____ à l'école.", "answer": "aller"}]}
 
 Jetzt deine Antwort:`
 
