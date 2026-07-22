@@ -52,7 +52,7 @@ export default function App() {
       <nav className="sticky top-0 z-50 border-b" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <h1 className="text-xl font-bold" style={{ color: 'var(--ink)' }}>Vokabular</h1>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--ink)' }}>Vokabular Nedi</h1>
             {/* Desktop navigation */}
             <div className="hidden items-center gap-8 sm:flex">
               {navItems.map(item => (
