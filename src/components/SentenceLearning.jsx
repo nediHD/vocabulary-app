@@ -332,7 +332,8 @@ export default function SentenceLearning({ setView, setInSession }) {
               <p style={{ color: 'var(--ink-soft)' }} className="text-sm mb-6">Keine Fragen für diesen Batch generiert.</p>
               <button
                 onClick={() => {
-                  setPhase('review')
+                  setPhase('write')
+                  setWordWriteIdx(0)
                   setUserInput('')
                   setRevealed(false)
                 }}
@@ -341,7 +342,7 @@ export default function SentenceLearning({ setView, setInSession }) {
                 onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                 onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
               >
-                Zu Text + Audio →
+                Zu den Wörtern →
               </button>
             </div>
           ) : questionIdx < current.questions.length ? (
@@ -431,7 +432,8 @@ export default function SentenceLearning({ setView, setInSession }) {
                         setUserInput('')
                         setRevealed(false)
                       } else {
-                        setPhase('review')
+                        setPhase('write')
+                        setWordWriteIdx(0)
                         setUserInput('')
                         setRevealed(false)
                       }
@@ -441,7 +443,7 @@ export default function SentenceLearning({ setView, setInSession }) {
                     onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                     onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
                   >
-                    {questionIdx + 1 < current.questions.length ? 'Nächste Frage' : 'Weiter: Text + Audio'}
+                    {questionIdx + 1 < current.questions.length ? 'Nächste Frage' : 'Weiter: Wörter schreiben'}
                   </button>
                 </>
               )}
@@ -507,19 +509,13 @@ export default function SentenceLearning({ setView, setInSession }) {
 
           {/* Weiter button */}
           <button
-            onClick={() => {
-              setPhase('write')
-              setWordWriteIdx(0)
-              setUserInput('')
-              setRevealed(false)
-              setAudioPlaying(false)
-            }}
+            onClick={handleNextBatch}
             className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
             style={{ backgroundColor: 'var(--blue)' }}
             onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
             onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
           >
-            Weiter: Wörter schreiben →
+            Weiter →
           </button>
         </div>
       )}
@@ -563,7 +559,12 @@ export default function SentenceLearning({ setView, setInSession }) {
 
           <div className="flex w-full max-w-2xl gap-4">
             <button
-              onClick={() => setPhase('review')}
+              onClick={() => {
+                setPhase('questions')
+                setQuestionIdx(0)
+                setUserInput('')
+                setRevealed(false)
+              }}
               className="flex-1 rounded-2xl border px-6 py-3.5 font-semibold transition-colors"
               style={{
                 borderColor: 'var(--line-soft)',
@@ -607,13 +608,18 @@ export default function SentenceLearning({ setView, setInSession }) {
                 </div>
               </div>
               <button
-                onClick={handleNextBatch}
+                onClick={() => {
+                  setPhase('review')
+                  setUserInput('')
+                  setRevealed(false)
+                  setAudioPlaying(false)
+                }}
                 className="mt-6 w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={{ backgroundColor: 'var(--blue)' }}
                 onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                 onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
               >
-                Weiter
+                Weiter: Text + Audio →
               </button>
             </div>
           )}
