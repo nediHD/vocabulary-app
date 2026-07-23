@@ -1,4 +1,4 @@
-export async function textToSpeech(text) {
+export async function textToSpeechBlob(text) {
   if (!import.meta.env.VITE_OPENAI_API_KEY) {
     throw new Error('TTS: OpenAI API Key nicht gesetzt (VITE_OPENAI_API_KEY)')
   }
@@ -26,12 +26,16 @@ export async function textToSpeech(text) {
       throw new Error(`TTS: ${errorMsg} (Status ${res.status})`)
     }
 
-    const blob = await res.blob()
-    return URL.createObjectURL(blob)
+    return await res.blob()
   } catch (err) {
     if (err.message.startsWith('TTS:')) {
       throw err
     }
     throw new Error(`TTS: Netzwerkfehler - ${err.message}`)
   }
+}
+
+export async function textToSpeech(text) {
+  const blob = await textToSpeechBlob(text)
+  return URL.createObjectURL(blob)
 }

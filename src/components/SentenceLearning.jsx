@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { groupWords, generateBatch } from '../lib/groq'
-import { textToSpeech } from '../lib/openai'
+import { textToSpeechBlob } from '../lib/openai'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
@@ -25,6 +25,10 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [pills, setPills] = useState([])
   const [audioPlaying, setAudioPlaying] = useState(false)
 
+  // Audio-Cache-Statistik (wiederverwendet vs. neu generiert)
+  const [reusedCount, setReusedCount] = useState(0)
+  const [newCount, setNewCount] = useState(0)
+
   // Wiederholung (flashcard review) der geübten Wörter am Ende
   const [mode, setMode] = useState('sentences') // 'sentences' | 'review'
   const [reviewQueue, setReviewQueue] = useState([])
@@ -41,7 +45,7 @@ export default function SentenceLearning({ setView, setInSession }) {
     return () => {
       setInSession(false)
       batches.forEach(batch => {
-        if (batch.audioUrl) URL.revokeObjectURL(batch.audioUrl)
+        if (batch.audioUrl && batch.audioUrl.startsWith('blob:')) URL.revokeObjectURL(batch.audioUrl)
       })
     }
   }, [])
@@ -49,6 +53,8 @@ export default function SentenceLearning({ setView, setInSession }) {
   const loadBatches = async () => {
     try {
       setLoading(true)
+      setReusedCount(0)
+      setNewCount(0)
       setLoadingStep('Wörter werden geladen...')
       const now = new Date().toISOString()
 
@@ -70,75 +76,127 @@ export default function SentenceLearning({ setView, setInSession }) {
         return
       }
 
-      const shuffled = dueCards.slice(0, 15)
+      const selected = dueCards.slice(0, 15)
+      const dueById = new Map(selected.map(c => [c.id, c]))
+      const available = new Set(selected.map(c => c.id))
 
-      setLoadingStep('Wörter werden gruppiert...')
-      let groups = []
+      // 1) Cache prüfen: gespeicherte Gruppen wiederverwenden (gierig, meiste Wörter zuerst)
+      setLoadingStep('Cache wird geprüft...')
+      const reusedBatches = []
       try {
-        groups = await groupWords(shuffled)
-      } catch (err) {
-        console.error('groupWords error:', err)
-        setError('Fehler beim Gruppieren: ' + err.message)
-        setLoading(false)
-        return
-      }
-
-      const generatedBatches = []
-      const totalGroups = groups.length
-      const failedGroups = []
-
-      for (let i = 0; i < groups.length; i++) {
-        setLoadingStep(`Texte werden generiert (${i + 1}/${totalGroups})...`)
-        const groupWords_arr = groups[i]
-
-        const matchedCards = groupWords_arr.map(frenchWord => {
-          return shuffled.find(card =>
-            card.french.toLowerCase().trim() === frenchWord.toLowerCase().trim()
-          )
-        }).filter(Boolean)
-
-        if (matchedCards.length === 0) {
-          console.warn(`Gruppe ${i + 1}: Keine Wörter gefunden für: ${groupWords_arr.join(', ')}`)
-          failedGroups.push(i + 1)
-          continue
-        }
-
-        try {
-          const batchData = await generateBatch(matchedCards)
-
-          setLoadingStep(`Audio wird erstellt (${i + 1}/${totalGroups})...`)
-          let audioUrl = null
-          try {
-            audioUrl = await textToSpeech(batchData.french)
-          } catch (ttsErr) {
-            console.error('TTS Error:', ttsErr.message)
+        const { data: cacheRows } = await supabase.from('audio_cache').select('*')
+        const sorted = (cacheRows || []).slice()
+          .sort((a, b) => (b.word_ids?.length || 0) - (a.word_ids?.length || 0))
+        for (const row of sorted) {
+          const ids = row.word_ids || []
+          if (ids.length > 0 && ids.every(id => available.has(id))) {
+            const words = ids.map(id => dueById.get(id)).filter(Boolean)
+            if (words.length !== ids.length) continue
+            const { data: pub } = supabase.storage.from('batch-audio').getPublicUrl(row.audio_path)
+            reusedBatches.push({
+              words,
+              french: row.french,
+              questions: Array.isArray(row.questions) ? row.questions : [],
+              audioUrl: pub?.publicUrl || null,
+              cached: true,
+            })
+            ids.forEach(id => available.delete(id))
           }
+        }
+      } catch (cacheErr) {
+        console.warn('Cache-Fehler (ignoriert):', cacheErr)
+      }
+      setReusedCount(reusedBatches.length)
 
-          generatedBatches.push({
-            words: matchedCards,
-            french: batchData.french,
-            questions: batchData.questions || [],
-            audioUrl,
-          })
-        } catch (err) {
-          console.error(`Fehler bei Gruppe ${i + 1}:`, err)
-          failedGroups.push(i + 1)
+      // 2) Restliche Wörter: KI gruppiert nur diese und generiert neu
+      const remaining = [...available].map(id => dueById.get(id)).filter(Boolean)
+      const newBatches = []
+      if (remaining.length > 0) {
+        setLoadingStep('Wörter werden gruppiert...')
+        let groups = []
+        try {
+          groups = await groupWords(remaining)
+        } catch (gErr) {
+          console.error('groupWords error:', gErr)
+          if (reusedBatches.length === 0) {
+            setError('Fehler beim Gruppieren: ' + gErr.message)
+            setLoading(false)
+            return
+          }
+          groups = []
+        }
+        setNewCount(groups.length)
+
+        const totalGroups = groups.length
+        for (let i = 0; i < groups.length; i++) {
+          setLoadingStep(`Texte werden generiert (${i + 1}/${totalGroups})... · ♻️ ${reusedBatches.length} · ✨ ${totalGroups}`)
+          const groupWords_arr = groups[i]
+
+          const matchedCards = groupWords_arr.map(fw =>
+            remaining.find(card => card.french.toLowerCase().trim() === fw.toLowerCase().trim())
+          ).filter(Boolean)
+
+          if (matchedCards.length === 0) continue
+
+          try {
+            const batchData = await generateBatch(matchedCards)
+
+            setLoadingStep(`Audio wird erstellt (${i + 1}/${totalGroups})... · ♻️ ${reusedBatches.length} · ✨ ${totalGroups}`)
+            let audioUrl = null
+            let audioPath = null
+            try {
+              const blob = await textToSpeechBlob(batchData.french)
+              const path = `${crypto.randomUUID()}.mp3`
+              const { error: upErr } = await supabase.storage.from('batch-audio')
+                .upload(path, blob, { contentType: 'audio/mpeg', upsert: false })
+              if (!upErr) {
+                audioPath = path
+                const { data: pub } = supabase.storage.from('batch-audio').getPublicUrl(path)
+                audioUrl = pub?.publicUrl || null
+              } else {
+                console.error('Upload-Fehler:', upErr.message)
+                audioUrl = URL.createObjectURL(blob)
+              }
+            } catch (ttsErr) {
+              console.error('TTS Error:', ttsErr.message)
+            }
+
+            // In Cache speichern (nur wenn Audio hochgeladen wurde)
+            if (audioPath) {
+              try {
+                await supabase.from('audio_cache').insert({
+                  word_ids: matchedCards.map(c => c.id),
+                  french: batchData.french,
+                  questions: batchData.questions || [],
+                  audio_path: audioPath,
+                })
+              } catch (insErr) {
+                console.warn('Cache-Insert-Fehler:', insErr)
+              }
+            }
+
+            newBatches.push({
+              words: matchedCards,
+              french: batchData.french,
+              questions: batchData.questions || [],
+              audioUrl,
+              cached: false,
+            })
+          } catch (genErr) {
+            console.error(`Fehler bei Gruppe ${i + 1}:`, genErr)
+          }
         }
       }
 
-      if (failedGroups.length > 0) {
-        console.warn(`${failedGroups.length} von ${totalGroups} Gruppen konnten nicht generiert werden`)
-      }
-
-      if (generatedBatches.length === 0) {
-        setError('Fehler: Keine Batches konnten generiert werden. Bitte versuche es erneut.')
+      const allBatches = [...reusedBatches, ...newBatches]
+      if (allBatches.length === 0) {
+        setError('Fehler: Keine Batches konnten erstellt werden. Bitte versuche es erneut.')
         setLoading(false)
         return
       }
 
-      setBatches(generatedBatches)
-      const initialPills = generatedBatches.map((_, i) => ({ id: i, color: 'gray' }))
-      setPills(initialPills)
+      setBatches(allBatches)
+      setPills(allBatches.map((_, i) => ({ id: i, color: 'gray' })))
       setLoadingStep('')
     } catch (err) {
       console.error('Error:', err)
@@ -152,6 +210,11 @@ export default function SentenceLearning({ setView, setInSession }) {
     return (
       <div className="text-center py-20">
         <p style={{ color: 'var(--ink-soft)' }} className="mb-2">{loadingStep || 'Wird geladen...'}</p>
+        {(reusedCount > 0 || newCount > 0) && (
+          <p className="mt-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>
+            ♻️ {reusedCount} wiederverwendet · ✨ {newCount} werden neu generiert
+          </p>
+        )}
       </div>
     )
   }
