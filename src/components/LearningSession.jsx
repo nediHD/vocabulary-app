@@ -51,7 +51,7 @@ export default function LearningSession({ setView, setInSession }) {
       }
 
       const shuffled = shuffle(data)
-      const limited = shuffled.slice(0, 15)
+      const limited = shuffled.slice(0, 5)
       setQueue(limited)
       setSessionSize(limited.length)
       const initialPills = limited.map(card => ({ id: card.id, color: 'gray' }))
@@ -171,7 +171,7 @@ export default function LearningSession({ setView, setInSession }) {
           setUserAnswer('')
         }
       } else {
-        // nicht_gewusst - rot + 3 Positionen vor
+        // nicht_gewusst - rot + 1 Position vor
         await supabase
           .from('cards')
           .update({ learning_correct_count: 0 })
@@ -181,7 +181,7 @@ export default function LearningSession({ setView, setInSession }) {
         setPills(newPills)
 
         const updatedCard = { ...card, learning_correct_count: 0 }
-        const newQueue = reinsertAt(queue.slice(1), updatedCard, 3)
+        const newQueue = reinsertAt(queue.slice(1), updatedCard, 1)
         setQueue(newQueue)
         setDirection(getRandomDirection())
         setPhase('input')
