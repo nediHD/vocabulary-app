@@ -129,6 +129,86 @@ Jetzt deine Antwort:`
   }
 }
 
+export async function segmentTranscript(transcript, durationSec) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+
+  // Transkript als Zeilen "[Sekunde] Text" (begrenzt, um Kontext klein zu halten)
+  let lines = transcript.map(t => `[${Math.round(t.start)}] ${t.text}`)
+  let joined = lines.join('\n')
+  if (joined.length > 9000) {
+    joined = joined.slice(0, 9000)
+  }
+
+  const suggested = Math.min(5, Math.max(2, Math.round((durationSec || 300) / 120)))
+  const lastEnd = transcript.length
+    ? Math.round(transcript[transcript.length - 1].start + (transcript[transcript.length - 1].dur || 0))
+    : durationSec || 0
+
+  const prompt = `Du bekommst das Transkript eines französischen Videos mit Zeitstempeln in Sekunden.
+Teile es in ${suggested} (zwischen 2 und 5) sinnvolle Abschnitte an natürlichen Themengrenzen.
+Das Video ist ca. ${lastEnd} Sekunden lang.
+
+Für jeden Abschnitt gib zurück:
+- "start": Startsekunde (Ganzzahl, = Zeitstempel der ersten Zeile des Abschnitts)
+- "end": Endsekunde (Ganzzahl, = ungefähres Ende des Abschnitts; letzter Abschnitt endet bei ${lastEnd})
+- "title": kurzer französischer Titel (max 6 Wörter)
+- "questions": 2-3 Verständnisfragen AUF FRANZÖSISCH zum Inhalt des Abschnitts, jeweils mit kurzer Musterantwort auf Französisch
+
+WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
+Format:
+{"segments":[{"start":0,"end":90,"title":"...","questions":[{"question":"...","answer":"..."}]}]}
+
+Transkript:
+${joined}`
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 2048,
+      }),
+    })
+
+    if (!res.ok) {
+      let errorMsg = res.statusText
+      try {
+        const errorData = await res.json()
+        errorMsg = errorData.error?.message || errorMsg
+      } catch {}
+      throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
+    }
+
+    const data = await res.json()
+    if (!data?.choices?.[0]?.message?.content) {
+      throw new Error('Groq: Ungültige Antwortstruktur')
+    }
+    const parsed = JSON.parse(cleanJSON(data.choices[0].message.content))
+    const segments = (parsed.segments || [])
+      .filter(s => typeof s.start === 'number' && typeof s.end === 'number' && s.end > s.start)
+      .map(s => ({
+        start: Math.max(0, Math.round(s.start)),
+        end: Math.round(s.end),
+        title: s.title || '',
+        questions: Array.isArray(s.questions) ? s.questions.filter(q => q.question && q.answer) : [],
+      }))
+    if (segments.length === 0) throw new Error('Groq: Keine Abschnitte erzeugt')
+    return segments
+  } catch (err) {
+    if (err.message.startsWith('Groq:')) throw err
+    if (err instanceof SyntaxError) throw new Error('Groq: Ungültige JSON-Antwort')
+    throw new Error(`Groq: Netzwerkfehler - ${err.message}`)
+  }
+}
+
 export async function generateSentence(word1, word2) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')

@@ -1,19 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const corsHeaders = {
+// SUPADATA_API_KEY wird als Supabase-Secret gesetzt (nicht im Repo).
+// Die live deployte Funktion hat den Key eingebettet; im öffentlichen Repo steht er nicht.
+const SUPADATA_KEY = Deno.env.get("SUPADATA_API_KEY") || "";
+
+const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -34,130 +35,51 @@ function extractVideoId(input: string): string | null {
   return null;
 }
 
-// Brace-matched JSON extraction after a marker (handles nested objects/strings)
-function extractJsonAfter(html: string, marker: string): any | null {
-  const i = html.indexOf(marker);
-  if (i === -1) return null;
-  const start = html.indexOf("{", i);
-  if (start === -1) return null;
-  let depth = 0, inStr = false, esc = false;
-  for (let j = start; j < html.length; j++) {
-    const c = html[j];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') inStr = false;
-    } else {
-      if (c === '"') inStr = true;
-      else if (c === "{") depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth === 0) {
-          try {
-            return JSON.parse(html.slice(start, j + 1));
-          } catch {
-            return null;
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { url } = await req.json().catch(() => ({}));
+    if (!SUPADATA_KEY) {
+      return json({ error: "Server nicht konfiguriert (SUPADATA_API_KEY fehlt)." }, 500);
+    }
+
+    const { url, lang } = await req.json().catch(() => ({}));
     const videoId = extractVideoId(url || "");
     if (!videoId) return json({ error: "Ungültige YouTube-URL" }, 400);
 
-    const watchRes = await fetch(
-      `https://www.youtube.com/watch?v=${videoId}&hl=en`,
-      {
-        headers: {
-          "User-Agent": UA,
-          "Accept-Language": "en-US,en;q=0.9",
-          "Cookie": "CONSENT=YES+cb.20210328-17-p0.en+FX+000",
-        },
-      },
-    );
-    const html = await watchRes.text();
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    let api = `https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(videoUrl)}`;
+    if (lang) api += `&lang=${encodeURIComponent(lang)}`;
 
-    const player =
-      extractJsonAfter(html, "ytInitialPlayerResponse =") ||
-      extractJsonAfter(html, 'ytInitialPlayerResponse"] =') ||
-      extractJsonAfter(html, "ytInitialPlayerResponse=");
+    const res = await fetch(api, { headers: { "x-api-key": SUPADATA_KEY } });
+    const data = await res.json().catch(() => null);
 
-    if (!player) {
-      return json({ error: "Konnte Video-Daten nicht laden" }, 502);
-    }
-
-    const status = player?.playabilityStatus?.status;
-    if (status && status !== "OK") {
+    if (!res.ok || !data) {
       return json(
-        {
-          error:
-            "Video nicht abspielbar: " +
-            (player?.playabilityStatus?.reason || status),
-        },
-        400,
+        { error: data?.error || data?.message || "Transkript konnte nicht geladen werden.", status: res.status },
+        res.status >= 400 && res.status < 600 ? res.status : 502,
       );
     }
 
-    const tracks =
-      player?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (!tracks || tracks.length === 0) {
-      return json(
-        { error: "Für dieses Video ist kein Transkript verfügbar." },
-        404,
-      );
-    }
-
-    // Prefer manual French, then any French, then manual any, then first
-    const track =
-      tracks.find((t: any) => t.languageCode?.startsWith("fr") && t.kind !== "asr") ||
-      tracks.find((t: any) => t.languageCode?.startsWith("fr")) ||
-      tracks.find((t: any) => t.kind !== "asr") ||
-      tracks[0];
-
-    const capRes = await fetch(track.baseUrl + "&fmt=json3", {
-      headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
-    });
-    const capJson = await capRes.json().catch(() => null);
-    if (!capJson?.events) {
-      return json({ error: "Transkript konnte nicht geladen werden." }, 502);
-    }
-
-    const transcript = capJson.events
-      .filter((e: any) => e.segs)
-      .map((e: any) => ({
-        start: Math.round((e.tStartMs || 0)) / 1000,
-        dur: Math.round((e.dDurationMs || 0)) / 1000,
-        text: e.segs
-          .map((s: any) => s.utf8 || "")
-          .join("")
-          .replace(/\s+/g, " ")
-          .trim(),
+    const content = Array.isArray(data.content) ? data.content : [];
+    const transcript = content
+      .map((c: any) => ({
+        start: (c.offset || 0) / 1000,
+        dur: (c.duration || 0) / 1000,
+        text: String(c.text || "").replace(/\s+/g, " ").trim(),
       }))
-      .filter((s: any) => s.text.length > 0);
+      .filter((c: any) => c.text.length > 0);
 
     if (transcript.length === 0) {
-      return json({ error: "Transkript ist leer." }, 404);
+      return json({ error: "Für dieses Video ist kein Transkript verfügbar." }, 404);
     }
 
     return json({
       videoId,
-      title: player?.videoDetails?.title || "",
-      author: player?.videoDetails?.author || "",
-      duration: Number(player?.videoDetails?.lengthSeconds || 0),
-      language: track.languageCode || "",
-      isAutoGenerated: track.kind === "asr",
+      language: data.lang || lang || "",
+      availableLangs: data.availableLangs || [],
       transcript,
     });
   } catch (err) {
-    return json({ error: "Serverfehler: " + (err?.message || String(err)) }, 500);
+    return json({ error: "Serverfehler: " + ((err as any)?.message || String(err)) }, 500);
   }
 });
