@@ -1,4 +1,4 @@
-# Vokabular – Persönliche Deutsch-Französisch Vokabel-App
+# Vokabular – Persönliche Deutsch-Französisch Vokabel-App-
 
 Eine Single-User Spaced-Repetition Vocabulary App zum Lernen von Deutsch-Französisch Wortpaaren. Vollständig in Deutsch, optimal für Mobilgeräte, hosted auf GitHub Pages.
 
