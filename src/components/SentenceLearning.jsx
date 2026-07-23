@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { groupWords, generateBatch } from '../lib/groq'
 import { textToSpeech } from '../lib/openai'
+import { reinsertAt } from '../utils/queue'
+import QuizCard from './QuizCard'
+
+function getRandomDirection() {
+  return Math.random() < 0.5 ? 'de→fr' : 'fr→de'
+}
 
 export default function SentenceLearning({ setView, setInSession }) {
   const [batches, setBatches] = useState([])
@@ -18,6 +24,16 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [revealed, setRevealed] = useState(false)
   const [pills, setPills] = useState([])
   const [audioPlaying, setAudioPlaying] = useState(false)
+
+  // Wiederholung (flashcard review) der geübten Wörter am Ende
+  const [mode, setMode] = useState('sentences') // 'sentences' | 'review'
+  const [reviewQueue, setReviewQueue] = useState([])
+  const [reviewPills, setReviewPills] = useState([])
+  const [reviewSize, setReviewSize] = useState(0)
+  const [reviewPhase, setReviewPhase] = useState('input')
+  const [reviewAnswer, setReviewAnswer] = useState('')
+  const [reviewDirection, setReviewDirection] = useState('de→fr')
+  const [reviewFinished, setReviewFinished] = useState(false)
 
   useEffect(() => {
     setInSession(true)
@@ -185,23 +201,172 @@ export default function SentenceLearning({ setView, setInSession }) {
     )
   }
 
+  const startReview = () => {
+    const seen = new Set()
+    const words = []
+    batches.forEach(b => (b.words || []).forEach(w => {
+      if (w && !seen.has(w.id)) {
+        seen.add(w.id)
+        words.push({ ...w, _correctCount: 0, _hadError: false })
+      }
+    }))
+    if (words.length === 0) return
+    setReviewQueue(words)
+    setReviewSize(words.length)
+    setReviewPills(words.map(w => ({ id: w.id, color: 'gray' })))
+    setReviewDirection(getRandomDirection())
+    setReviewPhase('input')
+    setReviewAnswer('')
+    setReviewFinished(false)
+    setMode('review')
+  }
+
+  const handleReviewGrade = async (result) => {
+    try {
+      const card = reviewQueue[0]
+      const newPills = [...reviewPills]
+      const pillIdx = newPills.findIndex(p => p.id === card.id)
+
+      if (result === 'gewusst') {
+        const needed = card._hadError ? 2 : 1
+        const newCount = card._correctCount + 1
+
+        if (newCount >= needed) {
+          newPills[pillIdx].color = 'dark-green'
+          setReviewPills(newPills)
+
+          if (!card._hadError) {
+            const newInterval = card.interval_days * 2
+            const nextReviewAt = new Date()
+            nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
+            await supabase
+              .from('cards')
+              .update({ interval_days: newInterval, next_review_at: nextReviewAt.toISOString() })
+              .eq('id', card.id)
+          }
+
+          const newQueue = reviewQueue.slice(1)
+          setReviewQueue(newQueue)
+          if (newQueue.length === 0) {
+            setReviewFinished(true)
+          } else {
+            setReviewDirection(getRandomDirection())
+            setReviewPhase('input')
+            setReviewAnswer('')
+          }
+        } else {
+          newPills[pillIdx].color = 'light-green'
+          setReviewPills(newPills)
+          const updatedCard = { ...card, _correctCount: newCount }
+          setReviewQueue(reinsertAt(reviewQueue.slice(1), updatedCard, null))
+          setReviewDirection(getRandomDirection())
+          setReviewPhase('input')
+          setReviewAnswer('')
+        }
+      } else {
+        const nextReviewAt = new Date()
+        nextReviewAt.setDate(nextReviewAt.getDate() + 1)
+        await supabase
+          .from('cards')
+          .update({ interval_days: 1, next_review_at: nextReviewAt.toISOString() })
+          .eq('id', card.id)
+
+        newPills[pillIdx].color = 'red'
+        setReviewPills(newPills)
+        const updatedCard = {
+          ...card,
+          interval_days: 1,
+          next_review_at: nextReviewAt.toISOString(),
+          _correctCount: 0,
+          _hadError: true,
+        }
+        setReviewQueue(reinsertAt(reviewQueue.slice(1), updatedCard, 3))
+        setReviewDirection(getRandomDirection())
+        setReviewPhase('input')
+        setReviewAnswer('')
+      }
+    } catch (err) {
+      console.error('Error grading review:', err)
+      alert('Fehler beim Speichern der Antwort.')
+    }
+  }
+
+  const handleReviewStop = () => {
+    if (confirm('Sitzung beenden?')) {
+      setInSession(false)
+      setView('dashboard')
+    }
+  }
+
+  // Wiederholung (flashcard) der geübten Wörter
+  if (mode === 'review') {
+    if (reviewFinished) {
+      return (
+        <div className="mx-auto max-w-2xl text-center py-20">
+          <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Wiederholung abgeschlossen! 🎉</h2>
+          <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Wiederholen!</p>
+          <button
+            onClick={() => {
+              setInSession(false)
+              setView('dashboard')
+            }}
+            className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+            style={{ backgroundColor: 'var(--blue)' }}
+            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+          >
+            Zur Übersicht
+          </button>
+        </div>
+      )
+    }
+    if (reviewQueue.length === 0) return null
+    const rcard = reviewQueue[0]
+    return (
+      <QuizCard
+        word={rcard}
+        direction={reviewDirection}
+        pills={reviewPills}
+        currentCardId={rcard.id}
+        sessionSize={reviewSize}
+        phase={reviewPhase}
+        userAnswer={reviewAnswer}
+        onAnswerChange={setReviewAnswer}
+        onReveal={() => setReviewPhase('reveal')}
+        onGrade={handleReviewGrade}
+        onStop={handleReviewStop}
+      />
+    )
+  }
+
   if (finished) {
     return (
       <div className="mx-auto max-w-2xl text-center py-20">
         <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Sitzung abgeschlossen! 🎉</h2>
         <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Üben!</p>
-        <button
-          onClick={() => {
-            setInSession(false)
-            setView('dashboard')
-          }}
-          className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-          style={{ backgroundColor: 'var(--blue)' }}
-          onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-          onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-        >
-          Zur Übersicht
-        </button>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={() => {
+              setInSession(false)
+              setView('dashboard')
+            }}
+            className="rounded-2xl border px-6 py-3 font-semibold transition-colors"
+            style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}
+            onMouseEnter={e => e.target.style.backgroundColor = 'var(--line-soft)'}
+            onMouseLeave={e => e.target.style.backgroundColor = 'var(--surface)'}
+          >
+            Zur Übersicht
+          </button>
+          <button
+            onClick={startReview}
+            className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+            style={{ backgroundColor: 'var(--blue)' }}
+            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+          >
+            Wörter wiederholen
+          </button>
+        </div>
       </div>
     )
   }
