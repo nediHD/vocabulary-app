@@ -88,7 +88,7 @@ export async function generateBatch(words) {
 
 ${wordList}
 
-WICHTIG: Der Text soll ungefähr 900 Zeichen lang sein (mindestens 700, höchstens 1000 Zeichen). Schreibe einen vollständigen, ausführlichen Absatz – nicht nur ein paar kurze Sätze.
+WICHTIG: Der Text darf höchstens 800 Zeichen lang sein.
 
 WICHTIG: Jedes Wort muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Kontexten und Sätzen. Der Text sollte natürlich und sinnvoll klingen.
 
@@ -131,9 +131,9 @@ Jetzt deine Antwort:`
     }
     const cleanedContent = cleanJSON(data.choices[0].message.content)
     const parsed = JSON.parse(cleanedContent)
-    // Sicherheits-Deckel: französischer Text max 1000 Zeichen (Kostenbegrenzung TTS)
+    // Sicherheits-Deckel: französischer Text max 800 Zeichen (Kostenbegrenzung TTS)
     if (parsed && typeof parsed.french === 'string') {
-      parsed.french = capText(parsed.french, 1000)
+      parsed.french = capText(parsed.french, 800)
     }
     return parsed
   } catch (err) {
