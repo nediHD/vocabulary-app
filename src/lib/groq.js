@@ -7,7 +7,8 @@ function cleanJSON(str) {
   return cleaned.trim()
 }
 
-// Kürzt Text auf max Zeichen, schneidet am letzten Satzende (.!?) zurück
+// Kürzt Text sinnvoll: endet am letzten vollständigen Satz (.!?) innerhalb des Limits,
+// nie mitten im Satz. Notfalls am letzten Wortende (nie mitten im Wort).
 function capText(text, max) {
   if (typeof text !== 'string' || text.length <= max) return text
   const slice = text.slice(0, max)
@@ -16,7 +17,9 @@ function capText(text, max) {
     slice.lastIndexOf('!'),
     slice.lastIndexOf('?'),
   )
-  return (lastEnd > max * 0.5 ? slice.slice(0, lastEnd + 1) : slice).trim()
+  if (lastEnd > 0) return slice.slice(0, lastEnd + 1).trim()
+  const lastSpace = slice.lastIndexOf(' ')
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim()
 }
 
 export async function groupWords(words) {
