@@ -84,11 +84,11 @@ export async function generateBatch(words) {
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe einen zusammenhängenden französischen Text (6-10 Sätze) mit diesen Wörtern:
+  const prompt = `Schreibe einen zusammenhängenden französischen Text (8-12 Sätze) mit diesen Wörtern:
 
 ${wordList}
 
-WICHTIG: Der Text darf HÖCHSTENS 800 Zeichen lang sein. Halte dich kurz und kürze notfalls, statt das Limit zu überschreiten.
+WICHTIG: Der Text soll ungefähr 900 Zeichen lang sein (mindestens 700, höchstens 1000 Zeichen). Schreibe einen vollständigen, ausführlichen Absatz – nicht nur ein paar kurze Sätze.
 
 WICHTIG: Jedes Wort muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Kontexten und Sätzen. Der Text sollte natürlich und sinnvoll klingen.
 
@@ -112,7 +112,7 @@ Jetzt deine Antwort:`
         model: 'llama-3.3-70b-versatile',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
-        max_tokens: 1024,
+        max_tokens: 1500,
       }),
     })
 
@@ -131,9 +131,9 @@ Jetzt deine Antwort:`
     }
     const cleanedContent = cleanJSON(data.choices[0].message.content)
     const parsed = JSON.parse(cleanedContent)
-    // Sicherheits-Deckel: französischer Text max 800 Zeichen (Kostenbegrenzung TTS)
+    // Sicherheits-Deckel: französischer Text max 1000 Zeichen (Kostenbegrenzung TTS)
     if (parsed && typeof parsed.french === 'string') {
-      parsed.french = capText(parsed.french, 800)
+      parsed.french = capText(parsed.french, 1000)
     }
     return parsed
   } catch (err) {
