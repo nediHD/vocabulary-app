@@ -7,6 +7,18 @@ function cleanJSON(str) {
   return cleaned.trim()
 }
 
+// Kürzt Text auf max Zeichen, schneidet am letzten Satzende (.!?) zurück
+function capText(text, max) {
+  if (typeof text !== 'string' || text.length <= max) return text
+  const slice = text.slice(0, max)
+  const lastEnd = Math.max(
+    slice.lastIndexOf('.'),
+    slice.lastIndexOf('!'),
+    slice.lastIndexOf('?'),
+  )
+  return (lastEnd > max * 0.5 ? slice.slice(0, lastEnd + 1) : slice).trim()
+}
+
 export async function groupWords(words) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
@@ -76,6 +88,8 @@ export async function generateBatch(words) {
 
 ${wordList}
 
+WICHTIG: Der Text darf HÖCHSTENS 800 Zeichen lang sein. Halte dich kurz und kürze notfalls, statt das Limit zu überschreiten.
+
 WICHTIG: Jedes Wort muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Kontexten und Sätzen. Der Text sollte natürlich und sinnvoll klingen.
 
 Generiere auch Lückentext-Fragen. Für jedes Wort: ein Satz mit _____ und die richtige Antwort.
@@ -117,6 +131,10 @@ Jetzt deine Antwort:`
     }
     const cleanedContent = cleanJSON(data.choices[0].message.content)
     const parsed = JSON.parse(cleanedContent)
+    // Sicherheits-Deckel: französischer Text max 800 Zeichen (Kostenbegrenzung TTS)
+    if (parsed && typeof parsed.french === 'string') {
+      parsed.french = capText(parsed.french, 800)
+    }
     return parsed
   } catch (err) {
     if (err.message.startsWith('Groq:')) {
@@ -257,4 +275,171 @@ export async function generateSentence(word1, word2) {
     }
     throw new Error(`Groq: Netzwerkfehler - ${err.message}`)
   }
+}
+
+// ---- Gemeinsamer Groq-Aufruf (für Hörübung) ----
+async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  })
+  if (!res.ok) {
+    let errorMsg = res.statusText
+    try { const e = await res.json(); errorMsg = e.error?.message || errorMsg } catch {}
+    throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
+  }
+  const data = await res.json()
+  const content = data?.choices?.[0]?.message?.content
+  if (!content) throw new Error('Groq: Ungültige Antwortstruktur')
+  return content
+}
+
+function parseGroqJSON(content) {
+  try { return JSON.parse(cleanJSON(content)) }
+  catch { throw new Error('Groq: Ungültige JSON-Antwort') }
+}
+
+// Segmentiert ein (auch langes) Transkript in sinnvolle Abschnitte (~3 Min, flexibel 2-5 Min).
+// transcript: [{start, dur, text}] ; return: [{start, end, title, transcript_slice}]
+export async function segmentTranscriptLong(transcript, durationSec) {
+  if (!Array.isArray(transcript) || transcript.length === 0) return []
+  const last = transcript[transcript.length - 1]
+  const total = Math.round(durationSec || (last.start + (last.dur || 0)))
+  if (total <= 0) return []
+
+  // 1) Kandidaten-Grenzen (Sek) via Groq, fensterweise (damit lange Videos ins Kontextfenster passen)
+  const lines = transcript.map(t => `[${Math.round(t.start)}] ${t.text}`)
+  const windows = []
+  let cur = [], curLen = 0
+  for (const ln of lines) {
+    if (curLen + ln.length > 7000 && cur.length) { windows.push(cur); cur = []; curLen = 0 }
+    cur.push(ln); curLen += ln.length + 1
+  }
+  if (cur.length) windows.push(cur)
+
+  const candidates = new Set()
+  for (const win of windows) {
+    const prompt = `Hier ist ein Ausschnitt eines Video-Transkripts (Format: [Sekunde] Text).
+Finde die besten Schnittpunkte an natürlichen Themengrenzen, damit Abschnitte ungefähr 3 Minuten (180 Sek) lang sind (erlaubt 120-300 Sek).
+Antworte NUR mit JSON ohne Markdown: {"boundaries":[Sekunde, Sekunde, ...]} (Startsekunden neuer Abschnitte).
+
+Transkript:
+${win.join('\n')}`
+    try {
+      const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 300, temperature: 0.2 }))
+      for (const b of (parsed.boundaries || [])) {
+        const s = Math.round(Number(b))
+        if (Number.isFinite(s) && s > 30 && s < total - 30) candidates.add(s)
+      }
+    } catch { /* Fenster ignorieren, JS-Fallback greift */ }
+  }
+
+  // 2) Grenzen sortieren + zu nahe (<90s) verwerfen
+  const merged = []
+  for (const b of [...candidates].sort((a, b) => a - b)) {
+    if (!merged.length || b - merged[merged.length - 1] >= 90) merged.push(b)
+  }
+
+  const nearestLineStart = (sec) => {
+    for (const t of transcript) if (t.start >= sec) return Math.round(t.start)
+    return sec
+  }
+
+  // 3) Segmentgrenzen deterministisch bauen (min 120, max 300 Sek)
+  const segStarts = [0]
+  let pos = 0
+  let guard = 0
+  while (pos < total && guard++ < 500) {
+    if (total - pos <= 300) break
+    let next = merged.find(b => b >= pos + 120 && b <= pos + 300)
+    if (next == null) {
+      next = nearestLineStart(pos + 180)
+      if (next <= pos + 60 || next >= pos + 300) next = pos + 180
+    }
+    if (next >= total - 60) break
+    segStarts.push(next)
+    pos = next
+  }
+
+  // 4) Segmente + transcript_slice
+  const segs = []
+  for (let i = 0; i < segStarts.length; i++) {
+    const start = segStarts[i]
+    const end = i + 1 < segStarts.length ? segStarts[i + 1] : total
+    const slice = transcript
+      .filter(t => t.start >= start && t.start < end)
+      .map(t => t.text).join(' ').replace(/\s+/g, ' ').trim()
+    segs.push({ start, end, title: '', transcript_slice: slice })
+  }
+  return segs.filter(s => s.transcript_slice.length > 0)
+}
+
+// Erzeugt den Podcast-Text (B2, baut auf priorSummary auf) + eine kurze summary für den nächsten Abschnitt.
+export async function generatePodcastText(segmentSlice, priorSummary, segIdx) {
+  const context = priorSummary
+    ? `Bisher in den vorigen Abschnitten: ${priorSummary}\n\n`
+    : ''
+  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast (wie eine Episode), der einem Lerner hilft, einen Video-Abschnitt zu verstehen.
+
+${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Französisch):
+"""${segmentSlice}"""
+
+Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
+1. Wähle die WICHTIGEN Wörter/Ausdrücke, die man braucht, um diesen Abschnitt zu verstehen (nicht zufällig – die zentralen/schwierigen). Erkläre ihre Bedeutung.
+2. Erkläre die Zusammenhänge und was in diesem Abschnitt passiert.
+3. Knüpfe an die vorigen Abschnitte an (fortlaufende Episode), NICHT isoliert.
+Das Französisch soll für einen B2-Lerner verständlich sein (C1/C2-Wörter erlaubt, aber erkläre sie). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
+
+WICHTIG: höchstens 6000 Zeichen. Antworte NUR mit JSON ohne Markdown:
+{"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
+  return {
+    podcast_text: capText(String(parsed.podcast_text || ''), 6000),
+    summary: String(parsed.summary || '').slice(0, 500),
+  }
+}
+
+// 3-4 Multiple-Choice-Fragen (4 Optionen, 1-2 richtig, mit Begründung), an den Podcast gekoppelt.
+export async function generateMCQuestions(podcastText, segmentSlice) {
+  const prompt = `Basierend auf diesem Podcast (Erklärung eines französischen Video-Abschnitts) und dem Transkript, erstelle 3-4 Multiple-Choice-Fragen auf FRANZÖSISCH.
+
+Podcast:
+"""${String(podcastText || '').slice(0, 6000)}"""
+
+Transkript-Abschnitt:
+"""${String(segmentSlice || '').slice(0, 3000)}"""
+
+Regeln:
+- Jede Frage hat genau 4 Antwortoptionen.
+- 1 ODER 2 Optionen sind richtig (variiere – mal 1, mal 2). Verrate NICHT, wie viele richtig sind.
+- Die Fragen beziehen sich auf Inhalte, die im Podcast erklärt wurden – aber NICHT zu offensichtlich (plausible falsche Optionen).
+- Zu jeder Frage ein Satz "justification" auf Französisch: warum die richtige(n) Antwort(en) richtig ist/sind.
+
+Antworte NUR mit JSON ohne Markdown:
+{"questions":[{"statement":"...","options":["A","B","C","D"],"correct":[0],"justification":"..."}]}`
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2000, temperature: 0.5 }))
+  const out = (parsed.questions || [])
+    .filter(q => q && Array.isArray(q.options) && q.options.length === 4 && Array.isArray(q.correct))
+    .map(q => ({
+      statement: String(q.statement || ''),
+      options: q.options.map(o => String(o)),
+      correct: [...new Set(q.correct.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n < 4))],
+      justification: String(q.justification || ''),
+    }))
+    .filter(q => q.statement && q.correct.length >= 1 && q.correct.length <= 2)
+    .slice(0, 4)
+  if (out.length === 0) throw new Error('Groq: Keine gültigen Fragen erzeugt')
+  return out
 }

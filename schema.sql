@@ -40,3 +40,53 @@ values ('batch-audio','batch-audio', true)
 on conflict (id) do update set public = true;
 create policy ba_read on storage.objects for select to anon using (bucket_id = 'batch-audio');
 create policy ba_insert on storage.objects for insert to anon with check (bucket_id = 'batch-audio');
+
+-- Hörübung: eine Übung pro YouTube-Video + lazy generierte Abschnitte (Podcast + MC-Fragen)
+create table if not exists audio_exercises (
+  id uuid primary key default gen_random_uuid(),
+  video_id text unique not null,
+  url text not null,
+  title text default '',
+  language text default 'fr',
+  duration_sec int default 0,
+  transcript jsonb not null default '[]'::jsonb,  -- voller Transkript-Slice [{start,dur,text}]
+  seg_count int not null default 0,
+  last_seg_idx int not null default 0,            -- Resume-Pointer
+  last_phase text not null default 'listen1',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists audio_segments (
+  id uuid primary key default gen_random_uuid(),
+  exercise_id uuid not null references audio_exercises(id) on delete cascade,
+  seg_idx int not null,
+  start_sec int not null,
+  end_sec int not null,
+  title text default '',
+  transcript_slice text default '',
+  summary text default '',                        -- Recap, Kontext für nächsten Abschnitt
+  podcast_text text,                              -- <=6000, null bis generiert
+  questions jsonb not null default '[]'::jsonb,   -- [{statement, options[4], correct[idx], justification}]
+  audio_path text,                                -- Pfad im Bucket 'podcast-audio', null bis generiert
+  generated boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (exercise_id, seg_idx)
+);
+create index if not exists idx_audio_segments_ex on audio_segments(exercise_id);
+
+alter table audio_exercises enable row level security;
+alter table audio_segments enable row level security;
+create policy ae_select on audio_exercises for select to anon using (true);
+create policy ae_insert on audio_exercises for insert to anon with check (true);
+create policy ae_update on audio_exercises for update to anon using (true) with check (true);
+create policy as_select on audio_segments for select to anon using (true);
+create policy as_insert on audio_segments for insert to anon with check (true);
+create policy as_update on audio_segments for update to anon using (true) with check (true);
+
+-- Bucket für Podcast-MP3s (öffentlich lesbar)
+insert into storage.buckets (id, name, public)
+values ('podcast-audio','podcast-audio', true)
+on conflict (id) do update set public = true;
+create policy pa_read on storage.objects for select to anon using (bucket_id = 'podcast-audio');
+create policy pa_insert on storage.objects for insert to anon with check (bucket_id = 'podcast-audio');
