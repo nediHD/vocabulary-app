@@ -5,6 +5,7 @@ import LearningSession from './components/LearningSession'
 import ReviewSession from './components/ReviewSession'
 import SentenceLearning from './components/SentenceLearning'
 import AudioExercise from './components/AudioExercise'
+import Services from './components/Services'
 import PasswordGate from './components/PasswordGate'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
     { id: 'review', label: 'Wiederholen' },
     { id: 'sentences', label: 'Sätze üben' },
     { id: 'audio', label: 'Hörübung' },
+    { id: 'services', label: 'Dienste' },
   ]
 
   const renderView = () => {
@@ -41,6 +43,8 @@ export default function App() {
         return <SentenceLearning setView={setView} setInSession={setInSession} />
       case 'audio':
         return <AudioExercise setView={setView} setInSession={setInSession} />
+      case 'services':
+        return <Services setView={setView} />
       default:
         return <Dashboard setView={setView} setInSession={setInSession} />
     }
