@@ -5,8 +5,8 @@ import { textToSpeechBlob } from '../lib/openai'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
-function getRandomDirection() {
-  return Math.random() < 0.5 ? 'de→fr' : 'fr→de'
+function nextDirection(current) {
+  return current === 'de→fr' ? 'fr→de' : 'de→fr'
 }
 
 export default function SentenceLearning({ setView, setInSession }) {
@@ -277,7 +277,7 @@ export default function SentenceLearning({ setView, setInSession }) {
     setReviewQueue(words)
     setReviewSize(words.length)
     setReviewPills(words.map(w => ({ id: w.id, color: 'gray' })))
-    setReviewDirection(getRandomDirection())
+    setReviewDirection('de→fr')
     setReviewPhase('input')
     setReviewAnswer('')
     setReviewFinished(false)
@@ -313,7 +313,7 @@ export default function SentenceLearning({ setView, setInSession }) {
           if (newQueue.length === 0) {
             setReviewFinished(true)
           } else {
-            setReviewDirection(getRandomDirection())
+            setReviewDirection(nextDirection)
             setReviewPhase('input')
             setReviewAnswer('')
           }
@@ -322,7 +322,7 @@ export default function SentenceLearning({ setView, setInSession }) {
           setReviewPills(newPills)
           const updatedCard = { ...card, _correctCount: newCount }
           setReviewQueue(reinsertAt(reviewQueue.slice(1), updatedCard, null))
-          setReviewDirection(getRandomDirection())
+          setReviewDirection(nextDirection)
           setReviewPhase('input')
           setReviewAnswer('')
         }
@@ -344,7 +344,7 @@ export default function SentenceLearning({ setView, setInSession }) {
           _hadError: true,
         }
         setReviewQueue(reinsertAt(reviewQueue.slice(1), updatedCard, 3))
-        setReviewDirection(getRandomDirection())
+        setReviewDirection(nextDirection)
         setReviewPhase('input')
         setReviewAnswer('')
       }

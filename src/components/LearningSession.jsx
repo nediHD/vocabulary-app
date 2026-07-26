@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
-function getRandomDirection() {
-  return Math.random() < 0.5 ? 'de→fr' : 'fr→de'
+function nextDirection(current) {
+  return current === 'de→fr' ? 'fr→de' : 'de→fr'
 }
 
 function shuffle(array) {
@@ -56,7 +56,7 @@ export default function LearningSession({ setView, setInSession }) {
       setSessionSize(limited.length)
       const initialPills = limited.map(card => ({ id: card.id, color: 'gray' }))
       setPills(initialPills)
-      setDirection(getRandomDirection())
+      setDirection('de→fr')
     } catch (err) {
       console.error('Error:', err)
     } finally {
@@ -149,7 +149,7 @@ export default function LearningSession({ setView, setInSession }) {
           if (newQueue.length === 0) {
             setFinished(true)
           } else {
-            setDirection(getRandomDirection())
+            setDirection(nextDirection)
             setPhase('input')
             setUserAnswer('')
           }
@@ -166,7 +166,7 @@ export default function LearningSession({ setView, setInSession }) {
           const updatedCard = { ...card, learning_correct_count: newCount }
           const newQueue = reinsertAt(queue.slice(1), updatedCard, null)
           setQueue(newQueue)
-          setDirection(getRandomDirection())
+          setDirection(nextDirection)
           setPhase('input')
           setUserAnswer('')
         }
@@ -183,7 +183,7 @@ export default function LearningSession({ setView, setInSession }) {
         const updatedCard = { ...card, learning_correct_count: 0 }
         const newQueue = reinsertAt(queue.slice(1), updatedCard, 1)
         setQueue(newQueue)
-        setDirection(getRandomDirection())
+        setDirection(nextDirection)
         setPhase('input')
         setUserAnswer('')
       }
