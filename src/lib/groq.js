@@ -400,7 +400,7 @@ ${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Franz�
 """${segmentSlice}"""
 
 Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
-1. Knüpfe am Anfang deutlich an den vorigen Abschnitt an (fortlaufende Episode, nicht isoliert).
+1. Das gesamte Video ist EIN einziger, durchgehender Podcast, der nur in mehrere Teile geschnitten ist (Ablauf: Video-Abschnitt → Podcast-Teil → nächster Video-Abschnitt → nächster Podcast-Teil …). Dieser Podcast-Teil ist die DIREKTE FORTSETZUNG des vorherigen Teils: mach nahtlos dort weiter, wo der letzte Teil aufgehört hat, mit einer kurzen Anknüpfung. Beginne NICHT wie eine neue, eigenständige Folge (kein "Bonjour/Willkommen"). Wenn dies der erste Teil ist, steige passend als Einstieg ins Thema ein.
 2. Erkläre danach, wie es in DIESEM Abschnitt weitergeht: was passiert, worum es geht und die Zusammenhänge.
 Das Französisch soll für einen B2-Lerner verständlich sein (C1/C2-Wörter erlaubt, aber erkläre sie). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
 
