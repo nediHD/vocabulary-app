@@ -87,15 +87,15 @@ export async function generateBatch(words) {
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe einen zusammenhängenden französischen Text (8-12 Sätze) mit diesen Wörtern:
+  const prompt = `Schreibe eine kurze, zusammenhängende Geschichte oder Szene auf Französisch mit diesen Wörtern:
 
 ${wordList}
 
-WICHTIG: Der Text darf höchstens 800 Zeichen lang sein.
+LÄNGE: Der Text soll ungefähr 700-800 Zeichen lang sein (mindestens 600 Zeichen, etwa 8-12 vollständige Sätze). Baue eine kleine Situation mit Details, Handlung und Kontext aus, damit der Text natürlich lang genug wird – nicht nur ein paar Sätze, die die Wörter aneinanderreihen.
 
-WICHTIG: Jedes Wort muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Kontexten und Sätzen. Der Text sollte natürlich und sinnvoll klingen.
+Jedes der Wörter oben muss mindestens 2-3 Mal im Text vorkommen, in verschiedenen Sätzen und Kontexten. Der Text soll natürlich, flüssig und sinnvoll klingen.
 
-Generiere auch Lückentext-Fragen. Für jedes Wort: ein Satz mit _____ und die richtige Antwort.
+Generiere außerdem Lückentext-Fragen: für jedes Wort ein Satz mit _____ und die richtige Antwort.
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
 
