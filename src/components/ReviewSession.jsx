@@ -1,7 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
+
+function DaysToast({ days }) {
+  if (days == null) return null
+  return (
+    <div style={{
+      position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
+      backgroundColor: 'var(--blue)', color: '#fff', padding: '10px 18px', borderRadius: 9999,
+      fontWeight: 600, fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    }}>
+      🔁 Kommt in {days} {days === 1 ? 'Tag' : 'Tagen'} wieder
+    </div>
+  )
+}
 
 function nextDirection(current) {
   return current === 'de→fr' ? 'fr→de' : 'de→fr'
@@ -17,11 +30,19 @@ export default function ReviewSession({ setView, setInSession }) {
   const [direction, setDirection] = useState('de→fr')
   const [pills, setPills] = useState([])
   const [sessionSize, setSessionSize] = useState(0)
+  const [feedbackDays, setFeedbackDays] = useState(null)
+  const feedbackTimer = useRef(null)
+
+  const showDays = (days) => {
+    setFeedbackDays(days)
+    clearTimeout(feedbackTimer.current)
+    feedbackTimer.current = setTimeout(() => setFeedbackDays(null), 2200)
+  }
 
   useEffect(() => {
     setInSession(true)
     loadCards()
-    return () => setInSession(false)
+    return () => { setInSession(false); clearTimeout(feedbackTimer.current) }
   }, [])
 
   const loadCards = async () => {
@@ -153,6 +174,7 @@ export default function ReviewSession({ setView, setInSession }) {
           // Fertig - dunkelgrün + entfernen
           newPills[pillIdx].color = 'dark-green'
           setPills(newPills)
+          showDays(card._hadError ? card.interval_days : card.interval_days * 2)
 
           // Nur bei fehlerfreien Karten: Interval verdoppeln
           if (!card._hadError) {
@@ -238,18 +260,21 @@ export default function ReviewSession({ setView, setInSession }) {
   }
 
   return (
-    <QuizCard
-      word={card}
-      direction={direction}
-      pills={pills}
-      currentCardId={card.id}
-      sessionSize={sessionSize}
-      phase={phase}
-      userAnswer={userAnswer}
-      onAnswerChange={setUserAnswer}
-      onReveal={handleReveal}
-      onGrade={handleGrade}
-      onStop={handleStop}
-    />
+    <>
+      <DaysToast days={feedbackDays} />
+      <QuizCard
+        word={card}
+        direction={direction}
+        pills={pills}
+        currentCardId={card.id}
+        sessionSize={sessionSize}
+        phase={phase}
+        userAnswer={userAnswer}
+        onAnswerChange={setUserAnswer}
+        onReveal={handleReveal}
+        onGrade={handleGrade}
+        onStop={handleStop}
+      />
+    </>
   )
 }

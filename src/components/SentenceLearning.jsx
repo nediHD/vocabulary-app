@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { groupWords, generateBatch } from '../lib/groq'
 import { textToSpeechBlob } from '../lib/openai'
@@ -7,6 +7,19 @@ import QuizCard from './QuizCard'
 
 function nextDirection(current) {
   return current === 'de→fr' ? 'fr→de' : 'de→fr'
+}
+
+function DaysToast({ days }) {
+  if (days == null) return null
+  return (
+    <div style={{
+      position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 100,
+      backgroundColor: 'var(--blue)', color: '#fff', padding: '10px 18px', borderRadius: 9999,
+      fontWeight: 600, fontSize: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    }}>
+      🔁 Kommt in {days} {days === 1 ? 'Tag' : 'Tagen'} wieder
+    </div>
+  )
 }
 
 export default function SentenceLearning({ setView, setInSession }) {
@@ -38,12 +51,21 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [reviewAnswer, setReviewAnswer] = useState('')
   const [reviewDirection, setReviewDirection] = useState('de→fr')
   const [reviewFinished, setReviewFinished] = useState(false)
+  const [feedbackDays, setFeedbackDays] = useState(null)
+  const feedbackTimer = useRef(null)
+
+  const showReviewDays = (days) => {
+    setFeedbackDays(days)
+    clearTimeout(feedbackTimer.current)
+    feedbackTimer.current = setTimeout(() => setFeedbackDays(null), 2200)
+  }
 
   useEffect(() => {
     setInSession(true)
     loadBatches()
     return () => {
       setInSession(false)
+      clearTimeout(feedbackTimer.current)
       batches.forEach(batch => {
         if (batch.audioUrl && batch.audioUrl.startsWith('blob:')) URL.revokeObjectURL(batch.audioUrl)
       })
@@ -297,6 +319,7 @@ export default function SentenceLearning({ setView, setInSession }) {
         if (newCount >= needed) {
           newPills[pillIdx].color = 'dark-green'
           setReviewPills(newPills)
+          showReviewDays(card._hadError ? card.interval_days : card.interval_days * 2)
 
           if (!card._hadError) {
             const newInterval = card.interval_days * 2
@@ -386,19 +409,22 @@ export default function SentenceLearning({ setView, setInSession }) {
     if (reviewQueue.length === 0) return null
     const rcard = reviewQueue[0]
     return (
-      <QuizCard
-        word={rcard}
-        direction={reviewDirection}
-        pills={reviewPills}
-        currentCardId={rcard.id}
-        sessionSize={reviewSize}
-        phase={reviewPhase}
-        userAnswer={reviewAnswer}
-        onAnswerChange={setReviewAnswer}
-        onReveal={() => setReviewPhase('reveal')}
-        onGrade={handleReviewGrade}
-        onStop={handleReviewStop}
-      />
+      <>
+        <DaysToast days={feedbackDays} />
+        <QuizCard
+          word={rcard}
+          direction={reviewDirection}
+          pills={reviewPills}
+          currentCardId={rcard.id}
+          sessionSize={reviewSize}
+          phase={reviewPhase}
+          userAnswer={reviewAnswer}
+          onAnswerChange={setReviewAnswer}
+          onReveal={() => setReviewPhase('reveal')}
+          onGrade={handleReviewGrade}
+          onStop={handleReviewStop}
+        />
+      </>
     )
   }
 
