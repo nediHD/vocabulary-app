@@ -394,21 +394,21 @@ export async function generatePodcastText(segmentSlice, priorSummary, segIdx) {
   const context = priorSummary
     ? `Bisher in den vorigen Abschnitten: ${priorSummary}\n\n`
     : ''
-  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast (wie eine Episode), der einem Lerner hilft, einen Video-Abschnitt zu verstehen.
+  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast. Du SPRICHST direkt mit einem Lerner (Niveau B2) und redest ihn per "tu" an.
 
 ${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Französisch):
 """${segmentSlice}"""
 
 Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
-1. Das gesamte Video ist EIN einziger, durchgehender Podcast, der nur in mehrere Teile geschnitten ist (Ablauf: Video-Abschnitt → Podcast-Teil → nächster Video-Abschnitt → nächster Podcast-Teil …). Dieser Podcast-Teil ist die DIREKTE FORTSETZUNG des vorherigen Teils: mach nahtlos dort weiter, wo der letzte Teil aufgehört hat, mit einer kurzen Anknüpfung. Beginne NICHT wie eine neue, eigenständige Folge (kein "Bonjour/Willkommen"). Wenn dies der erste Teil ist, steige passend als Einstieg ins Thema ein.
-2. Erkläre danach, wie es in DIESEM Abschnitt weitergeht: was passiert, worum es geht und die Zusammenhänge.
-Das Französisch soll für einen B2-Lerner verständlich sein (C1/C2-Wörter erlaubt, aber erkläre sie). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
+1. Das gesamte Video ist EIN einziger, durchgehender Podcast, der nur in mehrere Teile geschnitten ist (Ablauf: Video-Abschnitt → Podcast-Teil → nächster Video-Abschnitt → …). Dieser Teil ist die DIREKTE FORTSETZUNG des vorigen: mach nahtlos weiter, kurze Anknüpfung, KEINE neue Begrüßung/Folge. Erster Teil = passender Einstieg.
+2. Erkläre dem Lerner wie ein Lehrer, was in diesem Abschnitt gesagt/gezeigt wurde – vereinfacht und in klaren Worten. Sprich ihn DIREKT an (per "tu") und erkläre auch das WARUM und die Zusammenhänge (z. B. "c'est ... parce que ..."). Es soll KEINE distanzierte Geschichten-Erzählung sein, sondern ein Gespräch, das den Lerner anspricht und ihm hilft, den Inhalt zu verstehen.
+Einfaches, verständliches Französisch (B2). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
 
-WICHTIG: mindestens 4000 Zeichen, höchstens 6000 Zeichen. Antworte NUR mit JSON ohne Markdown:
+WICHTIG: mindestens 3000 Zeichen, höchstens 5000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
-    podcast_text: capText(String(parsed.podcast_text || ''), 6000),
+    podcast_text: capText(String(parsed.podcast_text || ''), 5000),
     summary: String(parsed.summary || '').slice(0, 500),
   }
 }
