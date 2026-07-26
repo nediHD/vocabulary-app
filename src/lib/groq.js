@@ -400,12 +400,11 @@ ${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Franz�
 """${segmentSlice}"""
 
 Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
-1. Wähle die WICHTIGEN Wörter/Ausdrücke, die man braucht, um diesen Abschnitt zu verstehen (nicht zufällig – die zentralen/schwierigen). Erkläre ihre Bedeutung.
-2. Erkläre die Zusammenhänge und was in diesem Abschnitt passiert.
-3. Knüpfe an die vorigen Abschnitte an (fortlaufende Episode), NICHT isoliert.
+1. Knüpfe am Anfang deutlich an den vorigen Abschnitt an (fortlaufende Episode, nicht isoliert).
+2. Erkläre danach, wie es in DIESEM Abschnitt weitergeht: was passiert, worum es geht und die Zusammenhänge.
 Das Französisch soll für einen B2-Lerner verständlich sein (C1/C2-Wörter erlaubt, aber erkläre sie). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
 
-WICHTIG: höchstens 6000 Zeichen. Antworte NUR mit JSON ohne Markdown:
+WICHTIG: mindestens 4000 Zeichen, höchstens 6000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
