@@ -394,15 +394,16 @@ export async function generatePodcastText(segmentSlice, priorSummary, segIdx) {
   const context = priorSummary
     ? `Bisher in den vorigen Abschnitten: ${priorSummary}\n\n`
     : ''
-  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast. Du SPRICHST direkt mit einem Lerner (Niveau B2) und redest ihn per "tu" an.
+  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast. Du sprichst direkt mit einem Lerner (Niveau B2) und redest ihn per "tu" an.
 
 ${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Französisch):
 """${segmentSlice}"""
 
 Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
-1. Das gesamte Video ist EIN einziger, durchgehender Podcast, der nur in mehrere Teile geschnitten ist (Ablauf: Video-Abschnitt → Podcast-Teil → nächster Video-Abschnitt → …). Dieser Teil ist die DIREKTE FORTSETZUNG des vorigen: mach nahtlos weiter, kurze Anknüpfung, KEINE neue Begrüßung/Folge. Erster Teil = passender Einstieg.
-2. Erkläre dem Lerner wie ein Lehrer, was in diesem Abschnitt gesagt/gezeigt wurde – vereinfacht und in klaren Worten. Sprich ihn DIREKT an (per "tu") und erkläre auch das WARUM und die Zusammenhänge (z. B. "c'est ... parce que ..."). Es soll KEINE distanzierte Geschichten-Erzählung sein, sondern ein Gespräch, das den Lerner anspricht und ihm hilft, den Inhalt zu verstehen.
-Einfaches, verständliches Französisch (B2). Natürlicher, gesprochener Podcast-Stil, fließender Text, KEINE Aufzählungszeichen oder Nummerierung.
+1. FORTLAUFEND: Das ganze Video ist EIN durchgehender Podcast in mehreren Teilen. Dieser Teil setzt den vorigen nahtlos fort (kurze Anknüpfung, KEINE neue Begrüßung/Folge). Erster Teil = passender Einstieg.
+2. Erzähle in einfachem Französisch NACH, was in diesem Abschnitt passiert (der Inhalt/die Handlung), sodass der Lerner es leicht versteht.
+3. Erkläre dabei die WICHTIGEN Wörter und Ausdrücke aus dem Abschnitt (was sie bedeuten) – eingebettet in den Text, nicht als Liste.
+Sprich den Lerner die GANZE Zeit direkt an (per "tu"), wie ein Lehrer im Gespräch – KEIN distanzierter Erzählton. Einfaches, verständliches Französisch (B2), natürlicher gesprochener Podcast-Stil, fließend, KEINE Aufzählungszeichen oder Nummerierung.
 
 WICHTIG: mindestens 3000 Zeichen, höchstens 5000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`

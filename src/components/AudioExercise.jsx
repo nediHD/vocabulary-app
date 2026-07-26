@@ -57,6 +57,7 @@ export default function AudioExercise({ setView, setInSession }) {
   const [phase, setPhase] = useState('listen1') // listen1 | podcast | listen2 | mc
   const [playerReady, setPlayerReady] = useState(false)
   const [playing, setPlaying] = useState(false)
+  const [playPos, setPlayPos] = useState(0) // vergangene Sekunden im aktuellen Segment
   const [finished, setFinished] = useState(false)
 
   // Lazy-Generierung
@@ -193,9 +194,12 @@ export default function AudioExercise({ setView, setInSession }) {
     p.seekTo(seg.start_sec, true)
     p.playVideo()
     setPlaying(true)
+    setPlayPos(0)
     intervalRef.current = setInterval(() => {
       try {
-        if (p.getCurrentTime() >= seg.end_sec) {
+        const t = p.getCurrentTime()
+        setPlayPos(Math.max(0, Math.min(t - seg.start_sec, seg.end_sec - seg.start_sec)))
+        if (t >= seg.end_sec) {
           p.pauseVideo(); setPlaying(false); clearInterval(intervalRef.current)
         }
       } catch { /* noop */ }
@@ -267,10 +271,11 @@ export default function AudioExercise({ setView, setInSession }) {
     }
   }
 
-  const goPhase = (ph) => { stopSegment(); setPhase(ph); updateProgress(segIdx, ph) }
+  const goPhase = (ph) => { stopSegment(); setPlayPos(0); setPhase(ph); updateProgress(segIdx, ph) }
 
   const goToSegment = (idx, ph = 'listen1') => {
     stopSegment()
+    setPlayPos(0)
     setSegIdx(idx); setPhase(ph)
     setMcIdx(0); setSelected(new Set()); setRevealed(false)
     setFinished(false)
@@ -384,6 +389,7 @@ export default function AudioExercise({ setView, setInSession }) {
 
   const isGenerated = seg.generated
   const questions = Array.isArray(seg.questions) ? seg.questions : []
+  const segLen = Math.max(1, seg.end_sec - seg.start_sec)
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -431,12 +437,23 @@ export default function AudioExercise({ setView, setInSession }) {
           <button
             onClick={playing ? stopSegment : playSegment}
             disabled={!playerReady}
-            className="mb-8 rounded-2xl px-8 py-4 font-semibold text-white transition-colors"
+            className="mb-4 rounded-2xl px-8 py-4 font-semibold text-white transition-colors"
             style={{ ...BLUE, opacity: playerReady ? 1 : 0.5 }}
             onMouseEnter={hoverIn} onMouseLeave={hoverOut}
           >
             {!playerReady ? 'Player lädt…' : (playing ? '⏸ Stopp' : '▶ Abschnitt abspielen')}
           </button>
+
+          {/* Fortschritt im Segment */}
+          <div className="mb-8 w-full max-w-sm">
+            <div style={{ height: 6, backgroundColor: 'var(--line)', borderRadius: 9999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min(100, (playPos / segLen) * 100)}%`, backgroundColor: 'var(--blue)', transition: 'width 0.2s' }} />
+            </div>
+            <div className="mt-1 flex justify-between font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>
+              <span>{fmtTime(playPos)}</span>
+              <span>{fmtTime(segLen)}</span>
+            </div>
+          </div>
 
           {phase === 'listen1' ? (
             <button onClick={() => goPhase('podcast')}
