@@ -35,6 +35,27 @@ function extractVideoId(input: string): string | null {
   return null;
 }
 
+// Vom Creator platzierte Sponsor-/Eigenwerbung-Segmente über SponsorBlock (Community-DB)
+async function fetchSponsorBlock(videoId: string) {
+  try {
+    const url = `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&category=sponsor&category=selfpromo`;
+    const r = await fetch(url, { headers: { "User-Agent": "vokabular-app" } });
+    if (!r.ok) return [];
+    const arr = await r.json();
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((x: any) => Array.isArray(x.segment) && x.segment.length === 2)
+      .map((x: any) => ({
+        start: Math.floor(Number(x.segment[0])),
+        end: Math.ceil(Number(x.segment[1])),
+        category: x.category,
+      }))
+      .filter((a: any) => Number.isFinite(a.start) && Number.isFinite(a.end) && a.end > a.start);
+  } catch {
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -73,11 +94,14 @@ Deno.serve(async (req) => {
       return json({ error: "Für dieses Video ist kein Transkript verfügbar." }, 404);
     }
 
+    const adRanges = await fetchSponsorBlock(videoId);
+
     return json({
       videoId,
       language: data.lang || lang || "",
       availableLangs: data.availableLangs || [],
       transcript,
+      ad_ranges: adRanges,
     });
   } catch (err) {
     return json({ error: "Serverfehler: " + ((err as any)?.message || String(err)) }, 500);

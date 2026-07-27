@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { segmentTranscriptLong, generatePodcastText, generateMCQuestions } from '../lib/groq'
+import { segmentTranscriptLong, generatePodcastText, generateMCQuestions, detectAds } from '../lib/groq'
 import { synthesizePodcastMp3, FalBalanceError } from '../lib/inworld'
 
 // YouTube IFrame API einmalig laden
@@ -53,6 +53,7 @@ export default function AudioExercise({ setView, setInSession }) {
   const [exerciseId, setExerciseId] = useState(null)
   const [videoId, setVideoId] = useState('')
   const [segments, setSegments] = useState([])
+  const [adRanges, setAdRanges] = useState([])
   const [segIdx, setSegIdx] = useState(0)
   const [phase, setPhase] = useState('listen1') // listen1 | podcast | listen2 | mc
   const [playerReady, setPlayerReady] = useState(false)
@@ -198,6 +199,9 @@ export default function AudioExercise({ setView, setInSession }) {
     intervalRef.current = setInterval(() => {
       try {
         const t = p.getCurrentTime()
+        // vom Creator platzierte Werbung überspringen
+        const ad = adRanges.find(a => t >= a.start && t < a.end - 0.3)
+        if (ad) { p.seekTo(ad.end, true); return }
         setPlayPos(Math.max(0, Math.min(t - seg.start_sec, seg.end_sec - seg.start_sec)))
         if (t >= seg.end_sec) {
           p.pauseVideo(); setPlaying(false); clearInterval(intervalRef.current)
@@ -218,6 +222,7 @@ export default function AudioExercise({ setView, setInSession }) {
     if (!ex || !segs) { setError('Übung konnte nicht geladen werden.'); setMode('overview'); return }
     setExerciseId(id); exIdRef.current = id
     setVideoId(ex.video_id); setSegments(segs)
+    setAdRanges(Array.isArray(ex.ad_ranges) ? ex.ad_ranges : [])
     setSegIdx(ex.last_seg_idx || 0)
     setPhase(ex.last_phase || 'listen1')
     setMcIdx(0); setSelected(new Set()); setRevealed(false)
@@ -246,13 +251,20 @@ export default function AudioExercise({ setView, setInSession }) {
       if (!transcript.length) { setError('Kein Transkript gefunden.'); setMode('overview'); return }
       const dur = Math.round(transcript[transcript.length - 1].start + (transcript[transcript.length - 1].dur || 0))
 
+      // Werbung/Sponsoren: SponsorBlock (aus Edge Function) oder KI-Fallback
+      let ads = Array.isArray(data.ad_ranges) ? data.ad_ranges : []
+      if (ads.length === 0) {
+        setLoadStep('Werbung wird erkannt…')
+        try { ads = await detectAds(transcript) } catch { ads = [] }
+      }
+
       setLoadStep('Abschnitte werden erstellt…')
-      const segs = await segmentTranscriptLong(transcript, dur)
+      const segs = await segmentTranscriptLong(transcript, dur, ads)
       if (!segs.length) { setError('Konnte keine Abschnitte erstellen.'); setMode('overview'); return }
 
       const { data: ex, error: exErr } = await supabase.from('audio_exercises').insert({
         video_id: vid, url: url.trim(), language: data.language || 'fr',
-        duration_sec: dur, transcript, seg_count: segs.length,
+        duration_sec: dur, transcript, ad_ranges: ads, seg_count: segs.length,
         last_seg_idx: 0, last_phase: 'listen1',
       }).select().single()
       if (exErr) { setError('Speichern fehlgeschlagen: ' + exErr.message); setMode('overview'); return }

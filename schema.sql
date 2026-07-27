@@ -50,6 +50,7 @@ create table if not exists audio_exercises (
   language text default 'fr',
   duration_sec int default 0,
   transcript jsonb not null default '[]'::jsonb,  -- voller Transkript-Slice [{start,dur,text}]
+  ad_ranges jsonb not null default '[]'::jsonb,   -- Werbe-/Sponsor-Zeitbereiche [{start,end}] (SponsorBlock/KI)
   seg_count int not null default 0,
   last_seg_idx int not null default 0,            -- Resume-Pointer
   last_phase text not null default 'listen1',

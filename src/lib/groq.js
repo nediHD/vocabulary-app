@@ -315,9 +315,11 @@ function parseGroqJSON(content) {
 }
 
 // Segmentiert ein (auch langes) Transkript in sinnvolle Abschnitte (~3 Min, flexibel 2-5 Min).
-// transcript: [{start, dur, text}] ; return: [{start, end, title, transcript_slice}]
-export async function segmentTranscriptLong(transcript, durationSec) {
+// transcript: [{start, dur, text}] ; adRanges: [{start,end}] (Werbung, wird aus den Slices entfernt)
+// return: [{start, end, title, transcript_slice}]
+export async function segmentTranscriptLong(transcript, durationSec, adRanges = []) {
   if (!Array.isArray(transcript) || transcript.length === 0) return []
+  const isAd = (sec) => Array.isArray(adRanges) && adRanges.some(a => sec >= a.start && sec < a.end)
   const last = transcript[transcript.length - 1]
   const total = Math.round(durationSec || (last.start + (last.dur || 0)))
   if (total <= 0) return []
@@ -382,11 +384,51 @@ ${win.join('\n')}`
     const start = segStarts[i]
     const end = i + 1 < segStarts.length ? segStarts[i + 1] : total
     const slice = transcript
-      .filter(t => t.start >= start && t.start < end)
+      .filter(t => t.start >= start && t.start < end && !isAd(t.start))
       .map(t => t.text).join(' ').replace(/\s+/g, ' ').trim()
     segs.push({ start, end, title: '', transcript_slice: slice })
   }
   return segs.filter(s => s.transcript_slice.length > 0)
+}
+
+// KI-Fallback: erkennt vom Creator platzierte Werbung/Sponsoren im Transkript.
+// return: [{start, end}] (Sekunden)
+export async function detectAds(transcript) {
+  if (!Array.isArray(transcript) || transcript.length === 0) return []
+  const lines = transcript.map(t => `[${Math.round(t.start)}] ${t.text}`)
+  const windows = []
+  let cur = [], curLen = 0
+  for (const ln of lines) {
+    if (curLen + ln.length > 7000 && cur.length) { windows.push(cur); cur = []; curLen = 0 }
+    cur.push(ln); curLen += ln.length + 1
+  }
+  if (cur.length) windows.push(cur)
+
+  const ranges = []
+  for (const win of windows) {
+    const prompt = `Hier ist ein Ausschnitt eines Video-Transkripts (Format: [Sekunde] Text).
+Finde die Zeitbereiche, die vom CREATOR platzierte WERBUNG / SPONSOR / EIGENWERBUNG sind (z. B. "cette vidéo est sponsorisée par ...", Rabattcodes, Produkt- oder Kurs-Werbung, "va voir mon partenaire ..."). NICHT der eigentliche Inhalt, NICHT normale "abonnez-vous"-Sätze.
+Antworte NUR mit JSON ohne Markdown: {"ads":[{"start":Sekunde,"end":Sekunde}]} (leeres Array, wenn keine Werbung vorkommt).
+
+Transkript:
+${win.join('\n')}`
+    try {
+      const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 300, temperature: 0.1 }))
+      for (const a of (parsed.ads || [])) {
+        const s = Math.floor(Number(a.start)), e = Math.ceil(Number(a.end))
+        if (Number.isFinite(s) && Number.isFinite(e) && e > s) ranges.push({ start: s, end: e })
+      }
+    } catch { /* Fenster ignorieren */ }
+  }
+  // überlappende/benachbarte Bereiche zusammenfassen
+  ranges.sort((a, b) => a.start - b.start)
+  const merged = []
+  for (const r of ranges) {
+    const last = merged[merged.length - 1]
+    if (last && r.start <= last.end + 5) last.end = Math.max(last.end, r.end)
+    else merged.push({ ...r })
+  }
+  return merged
 }
 
 // Erzeugt den Podcast-Text (B2, baut auf priorSummary auf) + eine kurze summary für den nächsten Abschnitt.
