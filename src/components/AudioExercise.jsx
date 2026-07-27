@@ -186,33 +186,63 @@ export default function AudioExercise({ setView, setInSession }) {
     }
   }
 
-  // ---- YouTube-Segment abspielen ----
-  const playSegment = () => {
-    const p = playerRef.current
-    const seg = segments[segIdx]
-    if (!p || !seg) return
+  // ---- YouTube-Segment abspielen (Pause/Fortsetzen, Suchen, ±10s) ----
+  const startPolling = (seg) => {
     clearInterval(intervalRef.current)
-    p.seekTo(seg.start_sec, true)
-    p.playVideo()
-    setPlaying(true)
-    setPlayPos(0)
     intervalRef.current = setInterval(() => {
       try {
+        const p = playerRef.current
+        if (!p) return
         const t = p.getCurrentTime()
         // vom Creator platzierte Werbung überspringen
         const ad = adRanges.find(a => t >= a.start && t < a.end - 0.3)
         if (ad) { p.seekTo(ad.end, true); return }
         setPlayPos(Math.max(0, Math.min(t - seg.start_sec, seg.end_sec - seg.start_sec)))
-        if (t >= seg.end_sec) {
-          p.pauseVideo(); setPlaying(false); clearInterval(intervalRef.current)
-        }
+        if (t >= seg.end_sec) { p.pauseVideo(); setPlaying(false); clearInterval(intervalRef.current) }
       } catch { /* noop */ }
     }, 250)
   }
+
+  const playSegment = () => {
+    const p = playerRef.current
+    const seg = segments[segIdx]
+    if (!p || !seg) return
+    let t = 0
+    try { t = p.getCurrentTime() } catch { /* noop */ }
+    // ausserhalb des Segments oder am Ende -> von vorn; sonst dort fortsetzen
+    if (t < seg.start_sec || t >= seg.end_sec - 0.3) {
+      p.seekTo(seg.start_sec, true)
+      setPlayPos(0)
+    }
+    p.playVideo()
+    setPlaying(true)
+    startPolling(seg)
+  }
+
   const stopSegment = () => {
     clearInterval(intervalRef.current)
     try { playerRef.current?.pauseVideo?.() } catch { /* noop */ }
     setPlaying(false)
+  }
+
+  const doSeek = (targetSec) => {
+    const p = playerRef.current
+    const seg = segments[segIdx]
+    if (!p || !seg) return
+    let target = Math.max(seg.start_sec, Math.min(targetSec, seg.end_sec - 0.5))
+    const ad = adRanges.find(a => target >= a.start && target < a.end)
+    if (ad) target = Math.min(ad.end, seg.end_sec - 0.5)
+    try { p.seekTo(target, true) } catch { /* noop */ }
+    setPlayPos(Math.max(0, Math.min(target - seg.start_sec, seg.end_sec - seg.start_sec)))
+  }
+
+  const skip = (delta) => {
+    const p = playerRef.current
+    const seg = segments[segIdx]
+    if (!p || !seg) return
+    let base = seg.start_sec + playPos
+    try { base = p.getCurrentTime() } catch { /* noop */ }
+    doSeek(base + delta)
   }
 
   // ---- Navigation ----
@@ -453,18 +483,46 @@ export default function AudioExercise({ setView, setInSession }) {
             style={{ ...BLUE, opacity: playerReady ? 1 : 0.5 }}
             onMouseEnter={hoverIn} onMouseLeave={hoverOut}
           >
-            {!playerReady ? 'Player lädt…' : (playing ? '⏸ Stopp' : '▶ Abschnitt abspielen')}
+            {!playerReady ? 'Player lädt…' : (playing ? '⏸ Pause' : '▶ Abspielen')}
           </button>
 
-          {/* Fortschritt im Segment */}
-          <div className="mb-8 w-full max-w-sm">
-            <div style={{ height: 6, backgroundColor: 'var(--line)', borderRadius: 9999, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.min(100, (playPos / segLen) * 100)}%`, backgroundColor: 'var(--blue)', transition: 'width 0.2s' }} />
+          {/* Fortschritt im Segment – klickbar zum Springen */}
+          <div className="mb-4 w-full max-w-sm">
+            <div
+              onClick={(e) => {
+                if (!playerReady) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                doSeek(seg.start_sec + frac * segLen)
+              }}
+              style={{ height: 10, backgroundColor: 'var(--line)', borderRadius: 9999, overflow: 'hidden', cursor: playerReady ? 'pointer' : 'default' }}
+            >
+              <div style={{ height: '100%', width: `${Math.min(100, (playPos / segLen) * 100)}%`, backgroundColor: 'var(--blue)', transition: 'width 0.2s', pointerEvents: 'none' }} />
             </div>
             <div className="mt-1 flex justify-between font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>
               <span>{fmtTime(playPos)}</span>
               <span>{fmtTime(segLen)}</span>
             </div>
+          </div>
+
+          {/* ±10s Sprünge */}
+          <div className="mb-8 flex gap-3">
+            <button
+              onClick={() => skip(-10)}
+              disabled={!playerReady}
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors"
+              style={{ backgroundColor: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)', opacity: playerReady ? 1 : 0.5 }}
+            >
+              −10s
+            </button>
+            <button
+              onClick={() => skip(10)}
+              disabled={!playerReady}
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors"
+              style={{ backgroundColor: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)', opacity: playerReady ? 1 : 0.5 }}
+            >
+              +10s
+            </button>
           </div>
 
           {phase === 'listen1' ? (
