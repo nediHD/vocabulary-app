@@ -160,7 +160,7 @@ export async function generateCloze(words) {
   }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe einen zusammenhängenden, natürlichen französischen Text (eine kleine Szene/Geschichte mit Handlung und Kontext) mit diesen Lernwörtern:
+  const prompt = `Schreibe eine kurze zusammenhängende Erzählung auf Französisch – eine kleine Szene oder Geschichte mit Anfang, Mitte und Ende – mit diesen Lernwörtern:
 
 ${wordList}
 
