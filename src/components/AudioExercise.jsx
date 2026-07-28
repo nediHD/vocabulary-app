@@ -43,6 +43,30 @@ const BLUE = { backgroundColor: 'var(--blue)' }
 const hoverIn = e => (e.target.style.backgroundColor = 'var(--blue-dark)')
 const hoverOut = e => (e.target.style.backgroundColor = 'var(--blue)')
 
+// Tempo-Auswahl (Wiedergabegeschwindigkeit)
+function SpeedRow({ rates, value, onChange }) {
+  return (
+    <div className="mb-6 flex items-center justify-center gap-2 flex-wrap">
+      <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>Tempo</span>
+      {rates.map(r => {
+        const active = Math.abs(value - r) < 0.001
+        return (
+          <button
+            key={r}
+            onClick={() => onChange(r)}
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors"
+            style={active
+              ? { backgroundColor: 'var(--blue)', color: '#fff' }
+              : { backgroundColor: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--line)' }}
+          >
+            {r.toString().replace('.', ',')}×
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function AudioExercise({ setView, setInSession }) {
   const [mode, setMode] = useState('overview') // 'overview' | 'loading' | 'exercise'
   const [url, setUrl] = useState('')
@@ -71,10 +95,27 @@ export default function AudioExercise({ setView, setInSession }) {
   const [selected, setSelected] = useState(new Set())
   const [revealed, setRevealed] = useState(false)
 
+  // Wiedergabegeschwindigkeit (Video = YouTube-Stufen, Podcast = frei)
+  const [videoRate, setVideoRate] = useState(1)
+  const [podcastRate, setPodcastRate] = useState(1)
+
   const playerRef = useRef(null)
   const intervalRef = useRef(null)
   const inflight = useRef(new Set())
   const exIdRef = useRef(null)
+  const audioRef = useRef(null)
+  const videoRateRef = useRef(1)
+
+  useEffect(() => { videoRateRef.current = videoRate }, [videoRate])
+
+  const applyVideoRate = (r) => {
+    setVideoRate(r)
+    try { playerRef.current?.setPlaybackRate?.(r) } catch { /* noop */ }
+  }
+  const applyPodcastRate = (r) => {
+    setPodcastRate(r)
+    if (audioRef.current) audioRef.current.playbackRate = r
+  }
 
   useEffect(() => { exIdRef.current = exerciseId }, [exerciseId])
 
@@ -110,6 +151,7 @@ export default function AudioExercise({ setView, setInSession }) {
         events: {
           onReady: (e) => {
             setPlayerReady(true)
+            try { e.target.setPlaybackRate(videoRateRef.current) } catch { /* noop */ }
             try {
               const vd = e.target.getVideoData?.()
               if (vd?.title && exIdRef.current) {
@@ -215,6 +257,7 @@ export default function AudioExercise({ setView, setInSession }) {
       setPlayPos(0)
     }
     p.playVideo()
+    try { p.setPlaybackRate(videoRateRef.current) } catch { /* noop */ }
     setPlaying(true)
     startPolling(seg)
   }
@@ -525,6 +568,8 @@ export default function AudioExercise({ setView, setInSession }) {
             </button>
           </div>
 
+          <SpeedRow rates={[0.75, 1, 1.25]} value={videoRate} onChange={applyVideoRate} />
+
           {phase === 'listen1' ? (
             <button onClick={() => goPhase('podcast')}
               className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
@@ -568,7 +613,15 @@ export default function AudioExercise({ setView, setInSession }) {
           ) : (
             <>
               {podcastUrl(seg) ? (
-                <audio src={podcastUrl(seg)} controls className="mb-8 w-full max-w-md" />
+                <>
+                  <audio
+                    ref={el => { audioRef.current = el; if (el) el.playbackRate = podcastRate }}
+                    src={podcastUrl(seg)}
+                    controls
+                    className="mb-4 w-full max-w-md"
+                  />
+                  <SpeedRow rates={[0.75, 0.85, 1, 1.1, 1.2]} value={podcastRate} onChange={applyPodcastRate} />
+                </>
               ) : (
                 <p className="mb-6 text-sm" style={{ color: 'var(--ink-faint)' }}>Audio nicht verfügbar – Text unten.</p>
               )}

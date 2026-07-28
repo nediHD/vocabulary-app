@@ -391,7 +391,7 @@ export async function segmentTranscriptLong(transcript, durationSec, adRanges = 
   const candidates = new Set()
   for (const win of windows) {
     const prompt = `Hier ist ein Ausschnitt eines Video-Transkripts (Format: [Sekunde] Text).
-Finde die besten Schnittpunkte an natürlichen Themengrenzen, damit Abschnitte ungefähr 3 Minuten (180 Sek) lang sind (erlaubt 120-300 Sek).
+Finde die besten Schnittpunkte an natürlichen Themengrenzen. Abschnitte sollen ungefähr 2 Minuten (120 Sek) lang sein, erlaubt 60-240 Sek. Kürzere Abschnitte sind ausdrücklich OK, wenn dort eine klare Themengrenze ist – schneide lieber an einer sinnvollen Grenze als starr nach Zeit.
 Antworte NUR mit JSON ohne Markdown: {"boundaries":[Sekunde, Sekunde, ...]} (Startsekunden neuer Abschnitte).
 
 Transkript:
@@ -408,7 +408,7 @@ ${win.join('\n')}`
   // 2) Grenzen sortieren + zu nahe (<90s) verwerfen
   const merged = []
   for (const b of [...candidates].sort((a, b) => a - b)) {
-    if (!merged.length || b - merged[merged.length - 1] >= 90) merged.push(b)
+    if (!merged.length || b - merged[merged.length - 1] >= 45) merged.push(b)
   }
 
   const nearestLineStart = (sec) => {
@@ -416,18 +416,18 @@ ${win.join('\n')}`
     return sec
   }
 
-  // 3) Segmentgrenzen deterministisch bauen (min 120, max 300 Sek)
+  // 3) Segmentgrenzen deterministisch bauen (min 60, max 240 Sek; kürzer an klaren KI-Grenzen erlaubt)
   const segStarts = [0]
   let pos = 0
   let guard = 0
   while (pos < total && guard++ < 500) {
-    if (total - pos <= 300) break
-    let next = merged.find(b => b >= pos + 120 && b <= pos + 300)
+    if (total - pos <= 240) break
+    let next = merged.find(b => b >= pos + 60 && b <= pos + 240)
     if (next == null) {
-      next = nearestLineStart(pos + 180)
-      if (next <= pos + 60 || next >= pos + 300) next = pos + 180
+      next = nearestLineStart(pos + 150)
+      if (next <= pos + 45 || next >= pos + 240) next = pos + 150
     }
-    if (next >= total - 60) break
+    if (next >= total - 45) break
     segStarts.push(next)
     pos = next
   }
