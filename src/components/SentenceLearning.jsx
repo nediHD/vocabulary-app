@@ -1,12 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { groupWords, generateBatch } from '../lib/groq'
-import { textToSpeechBlob } from '../lib/openai'
+import { groupWords, generateCloze } from '../lib/groq'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
 function nextDirection(current) {
   return current === 'de→fr' ? 'fr→de' : 'de→fr'
+}
+
+// Vergleich großzügig: Groß/Klein, Akzente, Satzzeichen egal.
+function norm(s) {
+  return (s || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/['’]/g, "'")
+    .replace(/[^a-z0-9' -]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function DaysToast({ days }) {
@@ -30,17 +42,15 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [noDueWords, setNoDueWords] = useState(false)
   const [error, setError] = useState('')
   const [batchIdx, setBatchIdx] = useState(0)
-  const [phase, setPhase] = useState('listen')
-  const [questionIdx, setQuestionIdx] = useState(0)
+  const [phase, setPhase] = useState('cloze')
   const [wordWriteIdx, setWordWriteIdx] = useState(0)
   const [userInput, setUserInput] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [pills, setPills] = useState([])
-  const [audioPlaying, setAudioPlaying] = useState(false)
 
-  // Audio-Cache-Statistik (wiederverwendet vs. neu generiert)
-  const [reusedCount, setReusedCount] = useState(0)
-  const [newCount, setNewCount] = useState(0)
+  // Lückentext-Eingaben (keyed by Platzhalter-Nummer) + Auswertung
+  const [clozeAnswers, setClozeAnswers] = useState({})
+  const [clozeGraded, setClozeGraded] = useState(false)
 
   // Wiederholung (flashcard review) der geübten Wörter am Ende
   const [mode, setMode] = useState('sentences') // 'sentences' | 'review'
@@ -66,17 +76,12 @@ export default function SentenceLearning({ setView, setInSession }) {
     return () => {
       setInSession(false)
       clearTimeout(feedbackTimer.current)
-      batches.forEach(batch => {
-        if (batch.audioUrl && batch.audioUrl.startsWith('blob:')) URL.revokeObjectURL(batch.audioUrl)
-      })
     }
   }, [])
 
   const loadBatches = async () => {
     try {
       setLoading(true)
-      setReusedCount(0)
-      setNewCount(0)
       setLoadingStep('Wörter werden geladen...')
       const now = new Date().toISOString()
 
@@ -99,126 +104,49 @@ export default function SentenceLearning({ setView, setInSession }) {
       }
 
       const selected = dueCards.slice(0, 15)
-      const dueById = new Map(selected.map(c => [c.id, c]))
-      const available = new Set(selected.map(c => c.id))
 
-      // 1) Cache prüfen: gespeicherte Gruppen wiederverwenden (gierig, meiste Wörter zuerst)
-      setLoadingStep('Cache wird geprüft...')
-      const reusedBatches = []
+      setLoadingStep('Wörter werden gruppiert...')
+      let groups = []
       try {
-        const { data: cacheRows } = await supabase.from('audio_cache').select('*')
-        const sorted = (cacheRows || []).slice()
-          .sort((a, b) => (b.word_ids?.length || 0) - (a.word_ids?.length || 0))
-        for (const row of sorted) {
-          const ids = row.word_ids || []
-          if (ids.length > 0 && ids.every(id => available.has(id))) {
-            const words = ids.map(id => dueById.get(id)).filter(Boolean)
-            if (words.length !== ids.length) continue
-            const { data: pub } = supabase.storage.from('batch-audio').getPublicUrl(row.audio_path)
-            reusedBatches.push({
-              words,
-              french: row.french,
-              questions: Array.isArray(row.questions) ? row.questions : [],
-              audioUrl: pub?.publicUrl || null,
-              cached: true,
-            })
-            ids.forEach(id => available.delete(id))
-          }
-        }
-      } catch (cacheErr) {
-        console.warn('Cache-Fehler (ignoriert):', cacheErr)
-      }
-      setReusedCount(reusedBatches.length)
-
-      // 2) Restliche Wörter: KI gruppiert nur diese und generiert neu
-      const remaining = [...available].map(id => dueById.get(id)).filter(Boolean)
-      const newBatches = []
-      if (remaining.length > 0) {
-        setLoadingStep('Wörter werden gruppiert...')
-        let groups = []
-        try {
-          groups = await groupWords(remaining)
-        } catch (gErr) {
-          console.error('groupWords error:', gErr)
-          if (reusedBatches.length === 0) {
-            setError('Fehler beim Gruppieren: ' + gErr.message)
-            setLoading(false)
-            return
-          }
-          groups = []
-        }
-        setNewCount(groups.length)
-
-        const totalGroups = groups.length
-        for (let i = 0; i < groups.length; i++) {
-          setLoadingStep(`Texte werden generiert (${i + 1}/${totalGroups})... · ♻️ ${reusedBatches.length} · ✨ ${totalGroups}`)
-          const groupWords_arr = groups[i]
-
-          const matchedCards = groupWords_arr.map(fw =>
-            remaining.find(card => card.french.toLowerCase().trim() === fw.toLowerCase().trim())
-          ).filter(Boolean)
-
-          if (matchedCards.length === 0) continue
-
-          try {
-            const batchData = await generateBatch(matchedCards)
-
-            setLoadingStep(`Audio wird erstellt (${i + 1}/${totalGroups})... · ♻️ ${reusedBatches.length} · ✨ ${totalGroups}`)
-            let audioUrl = null
-            let audioPath = null
-            try {
-              const blob = await textToSpeechBlob(batchData.french)
-              const path = `${crypto.randomUUID()}.mp3`
-              const { error: upErr } = await supabase.storage.from('batch-audio')
-                .upload(path, blob, { contentType: 'audio/mpeg', upsert: false })
-              if (!upErr) {
-                audioPath = path
-                const { data: pub } = supabase.storage.from('batch-audio').getPublicUrl(path)
-                audioUrl = pub?.publicUrl || null
-              } else {
-                console.error('Upload-Fehler:', upErr.message)
-                audioUrl = URL.createObjectURL(blob)
-              }
-            } catch (ttsErr) {
-              console.error('TTS Error:', ttsErr.message)
-            }
-
-            // In Cache speichern (nur wenn Audio hochgeladen wurde)
-            if (audioPath) {
-              try {
-                await supabase.from('audio_cache').insert({
-                  word_ids: matchedCards.map(c => c.id),
-                  french: batchData.french,
-                  questions: batchData.questions || [],
-                  audio_path: audioPath,
-                })
-              } catch (insErr) {
-                console.warn('Cache-Insert-Fehler:', insErr)
-              }
-            }
-
-            newBatches.push({
-              words: matchedCards,
-              french: batchData.french,
-              questions: batchData.questions || [],
-              audioUrl,
-              cached: false,
-            })
-          } catch (genErr) {
-            console.error(`Fehler bei Gruppe ${i + 1}:`, genErr)
-          }
-        }
-      }
-
-      const allBatches = [...reusedBatches, ...newBatches]
-      if (allBatches.length === 0) {
-        setError('Fehler: Keine Batches konnten erstellt werden. Bitte versuche es erneut.')
+        groups = await groupWords(selected)
+      } catch (gErr) {
+        console.error('groupWords error:', gErr)
+        setError('Fehler beim Gruppieren: ' + gErr.message)
         setLoading(false)
         return
       }
 
-      setBatches(allBatches)
-      setPills(allBatches.map((_, i) => ({ id: i, color: 'gray' })))
+      const newBatches = []
+      for (let i = 0; i < groups.length; i++) {
+        setLoadingStep(`Lückentexte werden erstellt (${i + 1}/${groups.length})...`)
+        const groupWords_arr = groups[i]
+
+        const matchedCards = groupWords_arr.map(fw =>
+          selected.find(card => card.french.toLowerCase().trim() === fw.toLowerCase().trim())
+        ).filter(Boolean)
+
+        if (matchedCards.length === 0) continue
+
+        try {
+          const cloze = await generateCloze(matchedCards)
+          newBatches.push({
+            words: matchedCards,
+            text: cloze.text,
+            blanks: cloze.blanks,
+          })
+        } catch (genErr) {
+          console.error(`Fehler bei Gruppe ${i + 1}:`, genErr)
+        }
+      }
+
+      if (newBatches.length === 0) {
+        setError('Fehler: Keine Lückentexte konnten erstellt werden. Bitte versuche es erneut.')
+        setLoading(false)
+        return
+      }
+
+      setBatches(newBatches)
+      setPills(newBatches.map((_, i) => ({ id: i, color: 'gray' })))
       setLoadingStep('')
     } catch (err) {
       console.error('Error:', err)
@@ -232,11 +160,6 @@ export default function SentenceLearning({ setView, setInSession }) {
     return (
       <div className="text-center py-20">
         <p style={{ color: 'var(--ink-soft)' }} className="mb-2">{loadingStep || 'Wird geladen...'}</p>
-        {(reusedCount > 0 || newCount > 0) && (
-          <p className="mt-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>
-            ♻️ {reusedCount} wiederverwendet · ✨ {newCount} werden neu generiert
-          </p>
-        )}
       </div>
     )
   }
@@ -250,12 +173,12 @@ export default function SentenceLearning({ setView, setInSession }) {
             setError('')
             setLoadingStep('')
             setBatchIdx(0)
-            setPhase('listen')
-            setQuestionIdx(0)
+            setPhase('cloze')
+            setClozeAnswers({})
+            setClozeGraded(false)
             setWordWriteIdx(0)
             setUserInput('')
             setRevealed(false)
-            setAudioPlaying(false)
             loadBatches()
           }}
           className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
@@ -483,14 +406,17 @@ export default function SentenceLearning({ setView, setInSession }) {
       setFinished(true)
     } else {
       setBatchIdx(batchIdx + 1)
-      setPhase('listen')
-      setQuestionIdx(0)
+      setPhase('cloze')
+      setClozeAnswers({})
+      setClozeGraded(false)
       setWordWriteIdx(0)
       setUserInput('')
       setRevealed(false)
-      setAudioPlaying(false)
     }
   }
+
+  // Auswertung Lückentext
+  const clozeCorrectCount = current.blanks.filter(b => norm(clozeAnswers[b.n]) === norm(b.answer)).length
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -526,64 +452,81 @@ export default function SentenceLearning({ setView, setInSession }) {
         </div>
       </div>
 
-      {/* Phase: Listen */}
-      {phase === 'listen' && (
-        <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <p style={{ color: 'var(--ink-soft)' }} className="text-sm">Höre den Text an</p>
+      {/* Phase: Lückentext (Cloze) */}
+      {phase === 'cloze' && (
+        <div className="flex flex-col items-center py-8 sm:py-12">
+          <div className="mb-6 text-center">
+            <p style={{ color: 'var(--ink-soft)' }} className="text-sm">
+              Fülle die Lücken aus – tippe das passende französische Wort.
+              In Klammern steht die deutsche Bedeutung.
+            </p>
           </div>
 
-          <div className="mb-12">
-            {current.audioUrl ? (
-              <div className="flex flex-col items-center gap-6">
-                <audio
-                  src={current.audioUrl}
-                  onPlay={() => setAudioPlaying(true)}
-                  onEnded={() => setAudioPlaying(false)}
-                  style={{ maxWidth: '100%' }}
-                  controls
-                />
-                <button
-                  onClick={() => {
-                    const audio = document.querySelector('audio')
-                    if (audio) audio.play()
-                  }}
-                  className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-                  style={{ backgroundColor: 'var(--blue)' }}
-                  onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-                  onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-                >
-                  Wiederholen
-                </button>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--ink-faint)' }} className="text-sm">Audio konnte nicht geladen werden</p>
-            )}
-          </div>
-
-          <button
-            onClick={() => {
-              setPhase('questions')
-              setQuestionIdx(0)
-              setUserInput('')
-              setRevealed(false)
-            }}
-            className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+          <div
+            className="mb-8 w-full rounded-2xl border p-6 text-lg"
+            style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink)', lineHeight: 2.4 }}
           >
-            Weiter zu den Fragen →
-          </button>
-        </div>
-      )}
+            {current.text.split(/(\{\{\d+\}\})/).map((part, i) => {
+              const m = part.match(/^\{\{(\d+)\}\}$/)
+              if (!m) return <span key={i}>{part}</span>
+              const n = Number(m[1])
+              const blank = current.blanks.find(b => b.n === n)
+              if (!blank) return <span key={i}>____</span>
 
-      {/* Phase: Questions */}
-      {phase === 'questions' && (
-        <div className="flex flex-col items-center py-12 sm:py-20">
-          {current.questions.length === 0 ? (
-            <div className="text-center mb-8">
-              <p style={{ color: 'var(--ink-soft)' }} className="text-sm mb-6">Keine Fragen für diesen Batch generiert.</p>
+              const val = clozeAnswers[n] || ''
+              const correct = norm(val) === norm(blank.answer)
+              let borderColor = 'var(--blue)'
+              let bg = 'white'
+              if (clozeGraded) {
+                borderColor = correct ? '#16a34a' : '#ef4444'
+                bg = correct ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)'
+              }
+
+              return (
+                <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'middle', margin: '0 3px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                    <input
+                      type="text"
+                      value={val}
+                      disabled={clozeGraded}
+                      onChange={e => setClozeAnswers(prev => ({ ...prev, [n]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                      size={Math.max(6, blank.answer.length + 2)}
+                      className="rounded-lg border-2 px-2 py-1 text-center font-sans text-base outline-none"
+                      style={{ borderColor, backgroundColor: bg, color: 'var(--ink)' }}
+                    />
+                    <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>({blank.de})</span>
+                  </span>
+                  {clozeGraded && !correct && (
+                    <span className="mt-0.5 text-xs font-semibold" style={{ color: '#16a34a' }}>
+                      ✓ {blank.answer}
+                    </span>
+                  )}
+                  {clozeGraded && blank.changed && blank.note && (
+                    <span className="mt-0.5 max-w-[220px] text-xs italic" style={{ color: 'var(--blue-dark)' }}>
+                      ⓘ {blank.note}
+                    </span>
+                  )}
+                </span>
+              )
+            })}
+          </div>
+
+          {!clozeGraded ? (
+            <button
+              onClick={() => setClozeGraded(true)}
+              className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+              style={{ backgroundColor: 'var(--blue)' }}
+              onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+              onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+            >
+              Fertig
+            </button>
+          ) : (
+            <div className="w-full max-w-sm">
+              <p className="mb-4 text-center text-sm font-medium" style={{ color: 'var(--ink)' }}>
+                {clozeCorrectCount} / {current.blanks.length} richtig
+              </p>
               <button
                 onClick={() => {
                   setPhase('write')
@@ -591,190 +534,19 @@ export default function SentenceLearning({ setView, setInSession }) {
                   setUserInput('')
                   setRevealed(false)
                 }}
-                className="rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+                className="w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={{ backgroundColor: 'var(--blue)' }}
                 onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                 onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
               >
-                Zu den Wörtern →
+                Weiter: Wörter schreiben →
               </button>
             </div>
-          ) : questionIdx < current.questions.length ? (
-            <>
-              <div className="mb-8 text-center max-w-2xl">
-                <p style={{ color: 'var(--ink-soft)' }} className="text-sm mb-4">
-                  Frage {questionIdx + 1} von {current.questions.length}
-                </p>
-                <div
-                  className="text-lg leading-relaxed mb-6"
-                  style={{ color: 'var(--ink)' }}
-                >
-                  {current.questions[questionIdx].sentence.split('_____').map((part, i) => (
-                    <span key={i}>
-                      {part}
-                      {i < current.questions[questionIdx].sentence.split('_____').length - 1 && (
-                        <span style={{ fontWeight: 'bold', color: 'var(--blue)' }}>_____</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {!revealed ? (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Antwort eingeben..."
-                    value={userInput}
-                    onChange={e => setUserInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && setRevealed(true)}
-                    className="mb-6 w-full max-w-sm rounded-2xl border-2 px-4 py-4 text-center font-sans text-lg outline-none"
-                    style={{
-                      borderColor: 'var(--blue)',
-                      backgroundColor: 'white',
-                      color: 'var(--ink)',
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => setRevealed(true)}
-                    className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-                    style={{ backgroundColor: 'var(--blue)' }}
-                    onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-                    onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-                  >
-                    Aufdecken
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="mb-8 flex w-full flex-col gap-4 sm:flex-row max-w-2xl">
-                    <div
-                      className="flex-1 rounded-2xl border p-5"
-                      style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}
-                    >
-                      <div
-                        className="mb-1 font-mono text-xs font-medium uppercase tracking-wider"
-                        style={{ color: 'var(--ink-faint)' }}
-                      >
-                        Deine Antwort
-                      </div>
-                      <div className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-                        {userInput}
-                      </div>
-                    </div>
-                    <div
-                      className="flex-1 rounded-2xl border p-5"
-                      style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}
-                    >
-                      <div
-                        className="mb-1 font-mono text-xs font-medium uppercase tracking-wider"
-                        style={{ color: 'var(--blue-dark)' }}
-                      >
-                        Richtige Antwort
-                      </div>
-                      <div className="text-lg font-semibold" style={{ color: 'var(--blue-dark)' }}>
-                        {current.questions[questionIdx].answer}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (questionIdx + 1 < current.questions.length) {
-                        setQuestionIdx(questionIdx + 1)
-                        setUserInput('')
-                        setRevealed(false)
-                      } else {
-                        setPhase('write')
-                        setWordWriteIdx(0)
-                        setUserInput('')
-                        setRevealed(false)
-                      }
-                    }}
-                    className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-                    style={{ backgroundColor: 'var(--blue)' }}
-                    onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-                    onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-                  >
-                    {questionIdx + 1 < current.questions.length ? 'Nächste Frage' : 'Weiter: Wörter schreiben'}
-                  </button>
-                </>
-              )}
-            </>
-          ) : null}
-        </div>
-      )}
-
-      {/* Phase: Review */}
-      {phase === 'review' && (
-        <div className="flex flex-col items-center py-12 sm:py-20">
-          <div className="mb-8 text-center">
-            <p style={{ color: 'var(--ink-soft)' }} className="text-sm">
-              Lese und höre den Text nochmal:
-            </p>
-          </div>
-
-          {/* Audio player */}
-          {current.audioUrl && (
-            <div className="mb-8 w-full max-w-2xl flex flex-col items-center gap-4">
-              <audio
-                src={current.audioUrl}
-                controls
-                style={{ width: '100%', maxWidth: '500px' }}
-                onPlay={() => setAudioPlaying(true)}
-                onEnded={() => setAudioPlaying(false)}
-              />
-            </div>
           )}
-
-          {/* French text with highlighted keywords */}
-          <div
-            className="mb-10 w-full max-w-2xl rounded-2xl border p-6"
-            style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}
-          >
-            <div
-              className="mb-3 font-mono text-xs font-medium uppercase tracking-wider"
-              style={{ color: 'var(--ink-faint)' }}
-            >
-              Texte français
-            </div>
-            <div className="text-base leading-relaxed" style={{ color: 'var(--ink)' }}>
-              {current.french.split(' ').map((word, i) => {
-                const isKey = current.words.some(w =>
-                  word.toLowerCase().includes(w.french.toLowerCase())
-                )
-                return (
-                  <span key={i}>
-                    <span
-                      style={{
-                        fontWeight: isKey ? 'bold' : 'normal',
-                        color: isKey ? 'var(--blue)' : 'inherit',
-                      }}
-                    >
-                      {word}
-                    </span>
-                    {i < current.french.split(' ').length - 1 ? ' ' : ''}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Weiter button */}
-          <button
-            onClick={handleNextBatch}
-            className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-          >
-            Weiter →
-          </button>
         </div>
       )}
 
-      {/* Phase: Write */}
+      {/* Phase: Write (Deutsch → Französisch, alle Wörter der Gruppe) */}
       {phase === 'write' && (
         <div className="flex flex-col items-center py-12 sm:py-20">
           <div className="mb-8 text-center">
@@ -801,7 +573,7 @@ export default function SentenceLearning({ setView, setInSession }) {
                   className="w-full rounded-lg border px-4 py-3 font-sans text-lg outline-none"
                   style={{
                     borderColor: 'var(--line)',
-                    backgroundColor: idx === wordWriteIdx ? 'white' : (idx < wordWriteIdx ? 'var(--line-soft)' : 'var(--line-soft)'),
+                    backgroundColor: idx === wordWriteIdx ? 'white' : 'var(--line-soft)',
                     color: 'var(--ink)',
                     opacity: idx === wordWriteIdx ? 1 : 0.5,
                   }}
@@ -814,8 +586,7 @@ export default function SentenceLearning({ setView, setInSession }) {
           <div className="flex w-full max-w-2xl gap-4">
             <button
               onClick={() => {
-                setPhase('questions')
-                setQuestionIdx(0)
+                setPhase('cloze')
                 setUserInput('')
                 setRevealed(false)
               }}
@@ -862,18 +633,13 @@ export default function SentenceLearning({ setView, setInSession }) {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setPhase('review')
-                  setUserInput('')
-                  setRevealed(false)
-                  setAudioPlaying(false)
-                }}
+                onClick={handleNextBatch}
                 className="mt-6 w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={{ backgroundColor: 'var(--blue)' }}
                 onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
                 onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
               >
-                Weiter: Text + Audio →
+                Weiter →
               </button>
             </div>
           )}

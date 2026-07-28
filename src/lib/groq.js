@@ -150,6 +150,60 @@ Jetzt deine Antwort:`
   }
 }
 
+// Lückentext (Cloze) für „Sätze üben": ein zusammenhängender französischer Text (~1600 Zeichen),
+// in dem jedes Vorkommen eines Lernworts durch einen Platzhalter {{n}} ersetzt ist.
+// Für jede Lücke: exakte Form (answer), deutsche Bedeutung (de), Grundform (base),
+// ob die Form von der Grundform abweicht (changed) + kurze deutsche Erklärung (note).
+export async function generateCloze(words) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+
+  const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
+  const prompt = `Schreibe einen zusammenhängenden, natürlichen französischen Text (eine kleine Szene/Geschichte mit Handlung und Kontext) mit diesen Lernwörtern:
+
+${wordList}
+
+LÄNGE: ungefähr 1600 Zeichen (mindestens 1400, höchstens 1900).
+
+WICHTIGSTE REGEL – Lückentext: Jedes Vorkommen eines Lernworts im Text wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend nummeriert in der Reihenfolge des Auftretens). Das Lernwort selbst darf an dieser Stelle NICHT im Klartext stehen – dort steht nur der Platzhalter. Jedes Lernwort muss mindestens einmal vorkommen; kommt es mehrmals vor, ist JEDES Vorkommen ein eigener Platzhalter.
+
+Die Wörter dürfen natürlich gebeugt sein (Plural, konjugierte Verbform, weibliche Form, Zeitform usw.), so wie es der Satz verlangt. Andere (nicht gelernte) Wörter bleiben normal im Text.
+
+Für jede Lücke gib an:
+- "n": die Nummer des Platzhalters
+- "answer": die EXAKTE Form, wie sie an dieser Stelle in den Satz gehört (die gebeugte Form)
+- "de": die deutsche Bedeutung (aus der Liste oben)
+- "base": die Grundform des französischen Worts (wie in der Liste)
+- "changed": true, wenn "answer" von "base" abweicht (gebeugt), sonst false
+- "note": NUR wenn changed=true, eine kurze deutsche Erklärung, warum die Form so ist und worauf man achten muss (z. B. "1. Person Singular Präsens von boire", "Plural, weil mehrere", "weibliche Form"). Wenn changed=false, leerer String "".
+
+WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
+
+Beispiel-Format:
+{"text":"Le matin, je {{1}} un café avant d'aller au {{2}}. Mes collègues {{3}} aussi beaucoup de café.","blanks":[{"n":1,"answer":"bois","de":"trinken","base":"boire","changed":true,"note":"1. Person Singular Präsens von boire"},{"n":2,"answer":"travail","de":"Arbeit","base":"travail","changed":false,"note":""},{"n":3,"answer":"boivent","de":"trinken","base":"boire","changed":true,"note":"3. Person Plural Präsens von boire"}]}
+
+Jetzt deine Antwort:`
+
+  const content = await callGroq(prompt, { maxTokens: 3000, temperature: 0.6 })
+  const parsed = parseGroqJSON(content)
+
+  const text = String(parsed?.text || '')
+  const blanks = (Array.isArray(parsed?.blanks) ? parsed.blanks : [])
+    .map(b => ({
+      n: Number(b.n),
+      answer: String(b.answer || '').trim(),
+      de: String(b.de || '').trim(),
+      base: String(b.base || '').trim(),
+      changed: !!b.changed,
+      note: String(b.note || '').trim(),
+    }))
+    .filter(b => Number.isInteger(b.n) && b.answer.length > 0 && text.includes(`{{${b.n}}}`))
+
+  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiger Lückentext erzeugt')
+  return { text, blanks }
+}
+
 export async function segmentTranscript(transcript, durationSec) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
