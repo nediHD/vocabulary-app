@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function ManageWords() {
+export default function ManageWords({ setView }) {
   const [words, setWords] = useState([])
   const [german, setGerman] = useState('')
   const [french, setFrench] = useState('')
@@ -96,6 +96,13 @@ export default function ManageWords() {
 
   return (
     <div className="mx-auto max-w-4xl">
+      <button
+        onClick={() => setView('dashboard')}
+        className="mb-5 text-sm font-medium"
+        style={{ color: 'var(--ink-soft)' }}
+      >
+        ← Zur Übersicht
+      </button>
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-1" style={{ color: 'var(--ink)' }}>Meine Wörter</h2>
         <p style={{ color: 'var(--ink-soft)' }}>{words.length} Wörter insgesamt</p>

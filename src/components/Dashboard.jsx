@@ -131,6 +131,36 @@ export default function Dashboard({ setView, setInSession }) {
             Video &amp; Podcast →
           </span>
         </button>
+
+        <button
+          onClick={() => setView('sentences')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
+            color: 'var(--ink)',
+          }}
+        >
+          <span>Lückentext ✏️</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
+            Text schreiben →
+          </span>
+        </button>
+
+        <button
+          onClick={() => setView('words')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
+            color: 'var(--ink)',
+          }}
+        >
+          <span>Wörter verwalten 📖</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
+            {stats.total} →
+          </span>
+        </button>
       </div>
 
       <div className="mt-8 text-center">
