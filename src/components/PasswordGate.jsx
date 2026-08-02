@@ -25,7 +25,8 @@ export default function PasswordGate({ setAuthenticated }) {
     <div className="fixed inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--bg)' }}>
       <div className="max-w-sm w-full mx-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--ink)' }}>Vokabular</h1>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl aurora-cta text-2xl">🔒</div>
+          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--ink)' }}>Anmelden</h1>
           <p style={{ color: 'var(--ink-soft)' }}>Passwort erforderlich</p>
         </div>
 
@@ -58,10 +59,7 @@ export default function PasswordGate({ setAuthenticated }) {
 
           <button
             onClick={handleSubmit}
-            className="w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+            className="aurora-cta lift w-full rounded-2xl px-6 py-3.5 font-semibold text-white"
           >
             Zugreifen
           </button>

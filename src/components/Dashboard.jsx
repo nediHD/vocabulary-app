@@ -98,7 +98,7 @@ export default function Dashboard({ setView, setInSession }) {
           </div>
         </div>
 
-        <div className="rounded-3xl border-0 p-5" style={{ backgroundColor: 'var(--blue)', color: 'white' }}>
+        <div className="aurora-cta rounded-3xl border-0 p-5">
           <div className="font-mono text-3xl font-semibold">{stats.dueToday}</div>
           <div className="mt-1 text-xs font-medium uppercase tracking-wider opacity-80">
             Heute fällig
@@ -110,10 +110,7 @@ export default function Dashboard({ setView, setInSession }) {
       <div className="flex flex-col gap-3">
         <button
           onClick={handleStartLearning}
-          className="flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors sm:h-16"
-          style={{ backgroundColor: 'var(--blue)' }}
-          onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-          onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+          className="aurora-cta lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold text-white sm:h-16"
         >
           <span>Lernsitzung starten</span>
           <span className="font-mono text-sm opacity-75">
@@ -124,18 +121,12 @@ export default function Dashboard({ setView, setInSession }) {
         <button
           onClick={handleStartReview}
           disabled={stats.dueToday === 0}
-          className={`flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold transition-colors sm:h-16 border`}
+          className={`lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border`}
           style={{
-            backgroundColor: stats.dueToday === 0 ? 'var(--surface)' : 'var(--surface)',
-            borderColor: stats.dueToday === 0 ? 'var(--line-soft)' : 'var(--line-soft)',
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
             color: stats.dueToday === 0 ? 'var(--ink-soft)' : 'var(--ink)',
             cursor: stats.dueToday === 0 ? 'not-allowed' : 'pointer',
-          }}
-          onMouseEnter={e => {
-            if (stats.dueToday > 0) e.target.style.backgroundColor = 'var(--line-soft)'
-          }}
-          onMouseLeave={e => {
-            e.target.style.backgroundColor = 'var(--surface)'
           }}
         >
           <span>Wiederholung starten</span>

@@ -2,23 +2,89 @@
 
 @layer base {
   :root {
-    --bg: #eef0f3;
-    --surface: #ffffff;
-    --surface-2: #fbfcfd;
-    --ink: #1b2230;
-    --ink-soft: #59616f;
-    --ink-faint: #8b919c;
-    --line: #e6e8ec;
-    --line-soft: #eef0f2;
-    --blue: #2f6df0;
-    --blue-dark: #1f57d6;
-    --blue-tint: #eef3fe;
-    --blue-tint-line: #d6e4ff;
+    /* Aurora palette */
+    --bg: transparent;              /* wrappers stay clear so the aurora shows through */
+    --surface: rgba(255, 255, 255, 0.58);
+    --surface-2: rgba(255, 255, 255, 0.42);
+    --ink: #16203a;
+    --ink-soft: #4a5470;
+    --ink-faint: #7c86a0;
+    --line: rgba(255, 255, 255, 0.7);
+    --line-soft: rgba(255, 255, 255, 0.6);
+    --blue: #3b6ef0;
+    --blue-dark: #2f5fe0;
+    --blue-tint: rgba(59, 110, 240, 0.1);
+    --blue-tint-line: rgba(59, 110, 240, 0.28);
+    --aurora-grad: linear-gradient(135deg, #3b6ef0, #7c5cff);
+  }
+
+  html {
+    background: #e9edf6;
   }
 
   body {
     @apply font-sans antialiased;
-    background-color: var(--bg);
+    background: transparent;
     color: var(--ink);
+    min-height: 100vh;
   }
+
+  /* Animated aurora backdrop — fixed behind all content */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(46% 40% at 12% 8%, rgba(59, 110, 240, 0.55), transparent 70%),
+      radial-gradient(50% 44% at 88% 18%, rgba(124, 92, 255, 0.5), transparent 72%),
+      radial-gradient(55% 50% at 78% 92%, rgba(34, 195, 182, 0.42), transparent 72%),
+      radial-gradient(50% 46% at 8% 88%, rgba(59, 110, 240, 0.4), transparent 72%),
+      #e9edf6;
+    filter: saturate(1.05);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: -20%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(30% 30% at 30% 30%, rgba(124, 92, 255, 0.35), transparent 70%),
+      radial-gradient(28% 28% at 70% 65%, rgba(34, 195, 182, 0.3), transparent 70%);
+    filter: blur(30px);
+    animation: auroraDrift 22s ease-in-out infinite alternate;
+  }
+
+  @keyframes auroraDrift {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(4%, 3%, 0) scale(1.12); }
+    100% { transform: translate3d(-3%, -4%, 0) scale(1.06); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::after { animation: none; }
+  }
+}
+
+/* Glassmorphism: every surface that uses --surface gets frosted blur automatically */
+[style*="var(--surface)"],
+[style*="var(--surface-2)"] {
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+}
+
+/* Reusable Aurora helpers */
+.aurora-cta {
+  background: var(--aurora-grad);
+  color: #fff;
+  box-shadow: 0 14px 30px -12px rgba(75, 90, 240, 0.75);
+}
+.lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 40px -16px rgba(75, 90, 240, 0.55);
 }
