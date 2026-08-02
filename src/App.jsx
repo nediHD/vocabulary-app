@@ -22,12 +22,9 @@ export default function App() {
 
   const navItems = [
     { id: 'dashboard', label: 'Übersicht' },
-    { id: 'words', label: 'Wörter verwalten' },
-    { id: 'learning', label: 'Lernen' },
-    { id: 'review', label: 'Wiederholen' },
-    { id: 'sentences', label: 'Sätze üben' },
-    { id: 'audio', label: 'Hörübung' },
-    { id: 'services', label: 'Dienste' },
+    { id: 'words', label: 'Wörter' },
+    { id: 'sentences', label: 'Lückentext' },
+    { id: 'audio', label: 'Hören' },
   ]
 
   const renderView = () => {

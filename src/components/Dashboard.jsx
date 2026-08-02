@@ -72,29 +72,11 @@ export default function Dashboard({ setView, setInSession }) {
       </div>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-4">
         <div className="rounded-3xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
           <div className="font-mono text-3xl font-semibold" style={{ color: 'var(--ink)' }}>{stats.total}</div>
           <div className="mt-1 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
             Wörter insgesamt
-          </div>
-        </div>
-
-        <div className="rounded-3xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
-          <div className="font-mono text-3xl font-semibold" style={{ color: 'var(--ink)' }}>
-            {stats.learning}
-          </div>
-          <div className="mt-1 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-            Im Lernen
-          </div>
-        </div>
-
-        <div className="rounded-3xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
-          <div className="font-mono text-3xl font-semibold" style={{ color: 'var(--ink)' }}>
-            {stats.review}
-          </div>
-          <div className="mt-1 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-            In Wiederholung
           </div>
         </div>
 
@@ -133,6 +115,31 @@ export default function Dashboard({ setView, setInSession }) {
           <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
             {stats.dueToday > 0 ? `${stats.dueToday} heute →` : 'Keine fällig'}
           </span>
+        </button>
+
+        <button
+          onClick={() => setView('audio')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
+            color: 'var(--ink)',
+          }}
+        >
+          <span>Hören 🎧</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
+            Video &amp; Podcast →
+          </span>
+        </button>
+      </div>
+
+      <div className="mt-8 text-center">
+        <button
+          onClick={() => setView('services')}
+          className="text-xs font-medium"
+          style={{ color: 'var(--ink-faint)' }}
+        >
+          Genutzte Dienste
         </button>
       </div>
     </div>

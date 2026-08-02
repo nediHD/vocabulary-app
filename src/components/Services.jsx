@@ -1,10 +1,9 @@
 const services = [
   { name: 'Supabase', url: 'https://supabase.com', use: 'Datenbank, Storage, Edge Functions (Projekt „fre")', key: 'VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY', where: 'Client' },
   { name: 'Groq', url: 'https://console.groq.com', use: 'LLM llama-3.3-70b — Texte, Gruppierung, Segmentierung, Podcast, Fragen', key: 'VITE_GROQ_API_KEY', where: 'Client' },
-  { name: 'OpenAI', url: 'https://platform.openai.com', use: 'TTS tts-1 — Audio in „Sätze üben"', key: 'VITE_OPENAI_API_KEY', where: 'Client' },
-  { name: 'Supadata', url: 'https://supadata.ai', use: 'YouTube-Transkripte (Hörübung)', key: 'SUPADATA_API_KEY', where: 'Serverseitig (Edge Function)' },
+  { name: 'Supadata', url: 'https://supadata.ai', use: 'YouTube-Transkripte („Hören")', key: 'SUPADATA_API_KEY', where: 'Serverseitig (Edge Function)' },
   { name: 'SponsorBlock', url: 'https://sponsor.ajay.app', use: 'Erkennt platzierte Werbung/Eigenwerbung im Video (zum Überspringen)', key: '—', where: 'kein Key (Community-DB)' },
-  { name: 'fal.ai', url: 'https://fal.ai', use: 'Inworld TTS-1.5 Max — Podcast-Audio (Hörübung)', key: 'FAL_KEY', where: 'Serverseitig (Edge Function)' },
+  { name: 'fal.ai', url: 'https://fal.ai', use: 'Inworld TTS-1.5 Max — Podcast-Audio („Hören")', key: 'FAL_KEY', where: 'Serverseitig (Edge Function)' },
   { name: 'YouTube', url: 'https://youtube.com', use: 'Player-Embed (Original-Audio) + Videoquelle', key: '—', where: 'kein Key' },
   { name: 'GitHub Pages', url: 'https://pages.github.com', use: 'Hosting der App + Deploy (GitHub Actions)', key: '—', where: '—' },
 ]

@@ -389,7 +389,7 @@ export default function AudioExercise({ setView, setInSession }) {
   if (mode === 'overview') {
     return (
       <div className="mx-auto max-w-2xl py-8">
-        <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--ink)' }}>Hörübung</h2>
+        <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--ink)' }}>Hören</h2>
         <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
           Füge einen YouTube-Link (französisches Video mit Untertiteln) ein. Das Video wird in Abschnitte
           geteilt – du hörst jeden Abschnitt, dann einen erklärenden Podcast, dann nochmal, und beantwortest Fragen.
