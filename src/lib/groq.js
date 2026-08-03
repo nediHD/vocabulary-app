@@ -501,11 +501,11 @@ Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
 3. Erkläre dabei die WICHTIGEN Wörter und Ausdrücke aus dem Abschnitt (was sie bedeuten) – eingebettet in den Text, nicht als Liste.
 Sprich den Lerner die GANZE Zeit direkt an (per "tu"), wie ein Lehrer im Gespräch – KEIN distanzierter Erzählton. Einfaches, verständliches Französisch (B2), natürlicher gesprochener Podcast-Stil, fließend, KEINE Aufzählungszeichen oder Nummerierung.
 
-WICHTIG: mindestens 3000 Zeichen, höchstens 5000 Zeichen. Antworte NUR mit JSON ohne Markdown:
+WICHTIG: mindestens 2500 Zeichen, höchstens 4500 Zeichen (entspricht max. ~5 Min Audio). Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
-    podcast_text: capText(String(parsed.podcast_text || ''), 5000),
+    podcast_text: capText(String(parsed.podcast_text || ''), 4500), // ~5 Min Audio; harte TTS-Grenze in inworld.js
     summary: String(parsed.summary || '').slice(0, 500),
   }
 }

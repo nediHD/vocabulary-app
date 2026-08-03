@@ -8,6 +8,24 @@ export class FalBalanceError extends Error {
   }
 }
 
+// Kosten-/Längen-Obergrenze pro Abschnitt.
+// Inworld TTS wird PRO ZEICHEN abgerechnet und die Audiolänge hängt direkt an der
+// Zeichenzahl. ~900 Zeichen ≈ 1 Min gesprochenes Französisch -> 4500 ≈ ~5 Min.
+// Harte Grenze: es wird NIE mehr als ~5 Min vertont (= bezahlt), egal wie lang der Text ist.
+export const MAX_TTS_CHARS = 4500
+export const MAX_TTS_MINUTES = 5
+
+// Auf <= max Zeichen kürzen, aber an einer Satzgrenze (kein abgeschnittenes Wort/Satz)
+function truncateToSentence(text, max) {
+  const clean = String(text || '').trim()
+  if (clean.length <= max) return clean
+  const slice = clean.slice(0, max)
+  const lastEnd = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('!'), slice.lastIndexOf('?'))
+  if (lastEnd > 0) return slice.slice(0, lastEnd + 1).trim()
+  const lastSpace = slice.lastIndexOf(' ')
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim()
+}
+
 // Text in <=1900-Zeichen-Stücke an Satzgrenzen aufteilen (Inworld-Limit 2000/Call)
 function chunkText(text, max = 1900) {
   const clean = String(text || '').trim()
@@ -50,7 +68,9 @@ async function ttsChunk(text) {
 // Erzeugt aus dem vollen Podcast-Text EIN MP3-Blob:
 // chunk -> inworld-tts (WAV-URL) -> decode -> concat -> MP3 (lamejs, mono ~96kbps)
 export async function synthesizePodcastMp3(fullText, { onProgress } = {}) {
-  const chunks = chunkText(fullText, 1900)
+  // Harte Kostengrenze: nie mehr als ~5 Min (MAX_TTS_CHARS) an TTS schicken.
+  const capped = truncateToSentence(fullText, MAX_TTS_CHARS)
+  const chunks = chunkText(capped, 1900)
   if (chunks.length === 0) throw new Error('Kein Text für Audio.')
 
   // 1) Alle Chunks vertonen (WAV-URLs)
