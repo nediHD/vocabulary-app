@@ -542,3 +542,45 @@ Antworte NUR mit JSON ohne Markdown:
   if (out.length === 0) throw new Error('Groq: Keine gültigen Fragen erzeugt')
   return out
 }
+
+// „Warum ist meine Antwort falsch?" – erklärt auf Deutsch, warum die GEWÄHLTE Option
+// inhaltlich nicht stimmt. Nur auf Klick (kleiner Aufruf, maxTokens gedeckelt).
+export async function explainWhyWrong({ statement, options, chosen, correct, podcastText, transcriptSlice }) {
+  const opt = i => (options[i] != null ? String(options[i]) : '')
+  const chosenTxt = (chosen || []).map(opt).filter(Boolean).join('  |  ') || '(keine)'
+  const correctTxt = (correct || []).map(opt).filter(Boolean).join('  |  ')
+  const prompt = `Ein Lerner hat bei einer INHALTLICHEN Verständnisfrage zu einem französischen Video-Abschnitt falsch geantwortet.
+Erkläre auf DEUTSCH in 2–3 kurzen Sätzen, warum die vom Lerner gewählte Antwort inhaltlich NICHT stimmt und was stattdessen richtig ist. Beziehe dich auf den Inhalt des Abschnitts, nicht auf Grammatik.
+
+Frage: "${String(statement || '')}"
+Vom Lerner gewählt (falsch): "${chosenTxt}"
+Richtig wäre: "${correctTxt}"
+
+Kontext – Erklärung/Podcast des Abschnitts:
+"""${String(podcastText || '').slice(0, 2500)}"""
+
+Transkript des Abschnitts (Französisch):
+"""${String(transcriptSlice || '').slice(0, 1500)}"""`
+  return String(await callGroq(prompt, { maxTokens: 350, temperature: 0.4 })).trim()
+}
+
+// Freies, INHALTLICHES Nachfragen zum Abschnitt. Antwortet in der Sprache der Frage
+// (Deutsch -> Deutsch, Französisch -> Französisch). Nur auf Klick, gedeckelt.
+export async function askAboutSegment(question, { podcastText, transcriptSlice } = {}) {
+  const q = String(question || '').trim().slice(0, 300)
+  if (!q) throw new Error('Keine Frage.')
+  const prompt = `Du bist ein hilfsbereiter Französisch-Lehrer und hilfst einem Lerner, den INHALT eines Video-Abschnitts zu verstehen.
+- Beantworte inhaltliche Fragen zum Abschnitt (was passiert, wer/was ist gemeint, was bedeutet eine Aussage).
+- Antworte in DERSELBEN Sprache, in der die Frage gestellt ist: deutsche Frage -> deutsche Antwort, französische Frage -> französische Antwort.
+- Kurz und klar, 2–4 Sätze. Wenn die Antwort nicht aus dem Abschnitt hervorgeht, sag das ehrlich.
+
+Transkript des Abschnitts (Französisch):
+"""${String(transcriptSlice || '').slice(0, 3000)}"""
+
+Erklärung/Podcast dazu:
+"""${String(podcastText || '').slice(0, 3000)}"""
+
+Frage des Lerners:
+"""${q}"""`
+  return String(await callGroq(prompt, { maxTokens: 400, temperature: 0.4 })).trim()
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { segmentTranscriptLong, generatePodcastText, generateMCQuestions, detectAds } from '../lib/groq'
+import { segmentTranscriptLong, generatePodcastText, generateMCQuestions, detectAds, explainWhyWrong, askAboutSegment } from '../lib/groq'
 import { synthesizePodcastMp3, FalBalanceError } from '../lib/inworld'
 
 // YouTube IFrame API einmalig laden
@@ -67,6 +67,90 @@ function SpeedRow({ rates, value, onChange }) {
   )
 }
 
+// Freies, inhaltliches Nachfragen zum Abschnitt (zweisprachig). Eigener State,
+// wird per key={seg.id} pro Abschnitt frisch gemountet -> Verlauf pro Abschnitt.
+function AskPanel({ podcastText, transcriptSlice }) {
+  const [open, setOpen] = useState(false)
+  const [input, setInput] = useState('')
+  const [thread, setThread] = useState([]) // [{ q, a }]
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const ask = async () => {
+    const q = input.trim()
+    if (!q || loading) return
+    setErr(''); setLoading(true); setInput('')
+    try {
+      const a = await askAboutSegment(q, { podcastText, transcriptSlice })
+      setThread(prev => [...prev, { q, a }])
+    } catch (e) {
+      setErr(e?.message || 'Fehler bei der Antwort.')
+      setInput(q)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="w-full max-w-2xl">
+        <button onClick={() => setOpen(true)} className="text-sm font-medium" style={{ color: 'var(--blue)' }}>
+          💬 Frage zum Inhalt stellen
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full max-w-2xl rounded-2xl border p-4 text-left"
+      style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>💬 Nachfragen zum Inhalt</span>
+        <button onClick={() => setOpen(false)} className="text-xs" style={{ color: 'var(--ink-faint)' }}>schließen ✕</button>
+      </div>
+
+      {thread.length > 0 && (
+        <div className="mb-3 space-y-3">
+          {thread.map((t, i) => (
+            <div key={i}>
+              <div className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{t.q}</div>
+              <div className="mt-1 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--ink-soft)' }}>{t.a}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') ask() }}
+          placeholder="Deine Frage (Deutsch oder Französisch)…"
+          maxLength={300}
+          disabled={loading}
+          className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--line)', backgroundColor: 'var(--surface-2)', color: 'var(--ink)' }}
+          onFocus={e => (e.target.style.borderColor = 'var(--blue)')}
+          onBlur={e => (e.target.style.borderColor = 'var(--line)')}
+        />
+        <button
+          onClick={ask}
+          disabled={loading || !input.trim()}
+          className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+          style={{ ...BLUE, opacity: loading || !input.trim() ? 0.5 : 1 }}
+        >
+          {loading ? '…' : 'Fragen'}
+        </button>
+      </div>
+      {err && <p className="mt-2 text-xs" style={{ color: '#ef4444' }}>{err}</p>}
+      <p className="mt-2 text-xs" style={{ color: 'var(--ink-faint)' }}>
+        Nur inhaltliche Fragen zum Abschnitt. Antwort in deiner Sprache.
+      </p>
+    </div>
+  )
+}
+
 export default function AudioExercise({ setView, setInSession }) {
   const [mode, setMode] = useState('overview') // 'overview' | 'loading' | 'exercise'
   const [url, setUrl] = useState('')
@@ -94,6 +178,36 @@ export default function AudioExercise({ setView, setInSession }) {
   const [mcIdx, setMcIdx] = useState(0)
   const [selected, setSelected] = useState(new Set())
   const [revealed, setRevealed] = useState(false)
+
+  // „Warum ist meine Antwort falsch?" (nur auf Klick, pro Frage)
+  const [why, setWhy] = useState('')
+  const [whyLoading, setWhyLoading] = useState(false)
+  const [whyErr, setWhyErr] = useState('')
+
+  // Erklärung zurücksetzen, sobald eine andere Frage/ein anderer Abschnitt dran ist
+  useEffect(() => { setWhy(''); setWhyErr(''); setWhyLoading(false) }, [mcIdx, segIdx, revealed])
+
+  const handleWhyWrong = async () => {
+    const seg = segments[segIdx]
+    const q = Array.isArray(seg?.questions) ? seg.questions[mcIdx] : null
+    if (!q) return
+    setWhyErr(''); setWhyLoading(true)
+    try {
+      const txt = await explainWhyWrong({
+        statement: q.statement,
+        options: q.options,
+        chosen: [...selected],
+        correct: q.correct,
+        podcastText: seg.podcast_text,
+        transcriptSlice: seg.transcript_slice,
+      })
+      setWhy(txt)
+    } catch (e) {
+      setWhyErr(e?.message || 'Erklärung fehlgeschlagen.')
+    } finally {
+      setWhyLoading(false)
+    }
+  }
 
   // Wiedergabegeschwindigkeit (Video = YouTube-Stufen, Podcast = frei)
   const [videoRate, setVideoRate] = useState(1)
@@ -631,6 +745,9 @@ export default function AudioExercise({ setView, setInSession }) {
                   {seg.podcast_text}
                 </div>
               </details>
+              <div className="mb-8">
+                <AskPanel key={`p-${seg.id || segIdx}`} podcastText={seg.podcast_text} transcriptSlice={seg.transcript_slice} />
+              </div>
               <button onClick={() => goPhase('listen2')}
                 className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={BLUE} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>
@@ -712,6 +829,30 @@ export default function AudioExercise({ setView, setInSession }) {
                       </div>
                       <div className="text-sm" style={{ color: 'var(--ink)' }}>{q.justification}</div>
                     </div>
+
+                    {[...selected].sort().join(',') !== [...correct].sort().join(',') && (
+                      <div className="mb-6">
+                        {why ? (
+                          <div className="rounded-2xl border p-5" style={{ borderColor: '#fecaca', backgroundColor: '#fef2f2' }}>
+                            <div className="mb-1 font-mono text-xs font-medium uppercase tracking-wider" style={{ color: '#c9820a' }}>
+                              Warum falsch
+                            </div>
+                            <div className="text-sm" style={{ color: 'var(--ink)' }}>{why}</div>
+                          </div>
+                        ) : (
+                          <button onClick={handleWhyWrong} disabled={whyLoading}
+                            className="text-sm font-medium" style={{ color: 'var(--blue)' }}>
+                            {whyLoading ? 'Wird erklärt…' : 'Warum ist meine Antwort falsch?'}
+                          </button>
+                        )}
+                        {whyErr && <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>{whyErr}</p>}
+                      </div>
+                    )}
+
+                    <div className="mb-6">
+                      <AskPanel key={seg.id || segIdx} podcastText={seg.podcast_text} transcriptSlice={seg.transcript_slice} />
+                    </div>
+
                     <button
                       onClick={() => {
                         if (mcIdx + 1 < questions.length) { setMcIdx(mcIdx + 1); setSelected(new Set()); setRevealed(false) }
