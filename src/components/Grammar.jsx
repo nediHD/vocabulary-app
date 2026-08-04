@@ -163,17 +163,27 @@ function TopicView({ section, group, topic, words, cache, setCache, onBack }) {
   const data = cached || null
 
   const load = async (force = false) => {
-    if (data && !force) return
     setLoading(true)
     setError('')
     try {
+      // Erklärung: fest aus der DB (grammar_explanations). Nur laden, wenn noch nicht vorhanden.
+      let explanation = data?.explanation
+      if (explanation == null) {
+        const { data: row } = await supabase
+          .from('grammar_explanations')
+          .select('explanation')
+          .eq('topic_key', cacheKey)
+          .maybeSingle()
+        explanation = row?.explanation || ''
+      }
+      // Übungen: frisch generiert (nur diese werden bei „Neue Übungen" neu erzeugt).
       const res = await generateGrammarExercises({
         path: `${section.name} › ${group.name}`,
         topic: topic.name,
         style: topic.style,
         words,
       })
-      setCache(prev => ({ ...prev, [cacheKey]: res }))
+      setCache(prev => ({ ...prev, [cacheKey]: { explanation, exercises: res.exercises } }))
     } catch (err) {
       setError(err.message || 'Fehler beim Erstellen der Übungen.')
     } finally {
@@ -215,15 +225,17 @@ function TopicView({ section, group, topic, words, cache, setCache, onBack }) {
 
       {data && !loading && (
         <>
-          {/* Erklärung */}
-          <div className="mb-6 rounded-3xl border p-5" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
-            <div className="mb-2 flex items-center gap-2 font-semibold" style={{ color: 'var(--blue-dark)' }}>
-              <span>📖</span> Erklärung
+          {/* Erklärung (fest aus der DB) */}
+          {data.explanation && (
+            <div className="mb-6 rounded-3xl border p-5" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
+              <div className="mb-2 flex items-center gap-2 font-semibold" style={{ color: 'var(--blue-dark)' }}>
+                <span>📖</span> Erklärung
+              </div>
+              <div className="whitespace-pre-line text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>
+                {data.explanation}
+              </div>
             </div>
-            <div className="whitespace-pre-line text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>
-              {data.explanation}
-            </div>
-          </div>
+          )}
 
           {/* Übungen */}
           <div className="mb-2 flex items-center gap-2 font-semibold" style={{ color: 'var(--ink)' }}>

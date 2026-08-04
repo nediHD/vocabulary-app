@@ -585,8 +585,10 @@ Frage des Lerners:
   return String(await callGroq(prompt, { maxTokens: 400, temperature: 0.4 })).trim()
 }
 
-// Grammatik-Übungen: deutsche Erklärung + 5-6 gemischte Übungen (Lücke „cloze" / Auswahl „choice"),
-// bevorzugt mit den Wiederholungs-Wörtern des Lerners. Kein TTS -> günstiger Textcall (maxTokens gedeckelt).
+// Grammatik-Übungen: 5-6 gemischte Übungen (Lücke „cloze" / Auswahl „choice"),
+// bevorzugt mit den Wiederholungs-Wörtern des Lerners. Die Erklärung wird NICHT hier
+// erzeugt, sondern fest aus der DB (grammar_explanations) geladen.
+// Kein TTS -> günstiger Textcall (maxTokens gedeckelt).
 // style: 'form' (v. a. Lücke) | 'contrast' (v. a. Auswahl/Unterschied) | 'mixed'
 export async function generateGrammarExercises({ path, topic, style = 'mixed', words = [] }) {
   const wordList = (words || []).slice(0, 12).map(w => `"${w.french}" (${w.german})`).join(', ')
@@ -606,19 +608,16 @@ Thema: ${path} — „${topic}".
 
 ${wordsBlock}
 
-Aufgabe:
-1. "explanation": Erkläre GENAU DIESES Thema auf DEUTSCH, klar und kompakt: wann man es benutzt, wie man es bildet, Signalwörter/Merkregeln und typische Fehler. 4–8 Sätze. Nutze \\n für Absätze.
-2. "exercises": 5–6 Übungen auf FRANZÖSISCH, alle exakt zu diesem Thema. ${styleHint}
+Aufgabe: Erstelle "exercises" – 5–6 Übungen auf FRANZÖSISCH, alle exakt zu diesem Thema. ${styleHint}
 
 Übungs-Typen:
 - "cloze": ein französischer Satz mit genau EINER Lücke, geschrieben als _____ (mehrere Unterstriche). "answer" = die exakte richtige Form (nur das eine Wort/die Wortgruppe für die Lücke). "hint" = kurzer deutscher Hinweis (z. B. Infinitiv + Person/Zeit). "explain" = kurze deutsche Begründung der Form.
 - "choice": ein französischer Satz oder eine Frage; "options" = 3–4 plausible Optionen; "correct" = Index (0-basiert) der EINEN richtigen Option; "explain" = deutsche Begründung, warum diese richtig ist und die anderen nicht.
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
-{"explanation":"...","exercises":[{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","hint":"aller, 1. Person Singular Futur simple","explain":"Signalwort „demain“ + einmalige Zukunft → Futur simple."},{"type":"choice","prompt":"Quand j'étais petit, je _____ souvent au parc.","options":["suis allé","allais","irai"],"correct":1,"explain":"Gewohnheit in der Vergangenheit → Imparfait („allais“)."}]}`
+{"exercises":[{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","hint":"aller, 1. Person Singular Futur simple","explain":"Signalwort „demain“ + einmalige Zukunft → Futur simple."},{"type":"choice","prompt":"Quand j'étais petit, je _____ souvent au parc.","options":["suis allé","allais","irai"],"correct":1,"explain":"Gewohnheit in der Vergangenheit → Imparfait („allais“)."}]}`
 
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.55 }))
-  const explanation = String(parsed?.explanation || '').trim()
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.55 }))
   const exercises = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
     .map(e => {
       const type = e && e.type === 'choice' ? 'choice' : 'cloze'
@@ -635,6 +634,6 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
     })
     .filter(Boolean)
     .slice(0, 6)
-  if (!explanation || exercises.length === 0) throw new Error('Groq: Keine Grammatik-Übungen erzeugt')
-  return { explanation, exercises }
+  if (exercises.length === 0) throw new Error('Groq: Keine Grammatik-Übungen erzeugt')
+  return { exercises }
 }
