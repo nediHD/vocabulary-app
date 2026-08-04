@@ -584,3 +584,57 @@ Frage des Lerners:
 """${q}"""`
   return String(await callGroq(prompt, { maxTokens: 400, temperature: 0.4 })).trim()
 }
+
+// Grammatik-Übungen: deutsche Erklärung + 5-6 gemischte Übungen (Lücke „cloze" / Auswahl „choice"),
+// bevorzugt mit den Wiederholungs-Wörtern des Lerners. Kein TTS -> günstiger Textcall (maxTokens gedeckelt).
+// style: 'form' (v. a. Lücke) | 'contrast' (v. a. Auswahl/Unterschied) | 'mixed'
+export async function generateGrammarExercises({ path, topic, style = 'mixed', words = [] }) {
+  const wordList = (words || []).slice(0, 12).map(w => `"${w.french}" (${w.german})`).join(', ')
+  const wordsBlock = wordList
+    ? `Der Lerner wiederholt gerade diese eigenen Wörter – BAUE SIE BEVORZUGT in die Übungen ein, wo sie inhaltlich passen (ruhig gebeugt/konjugiert, wie der Satz es verlangt). Passt ein Wort nicht zum Thema, lass es weg und erfinde stattdessen passende, einfache französische Wörter:\n${wordList}`
+    : `Der Lerner hat gerade keine Wiederholungs-Wörter. Erfinde selbst passende, einfache und gängige französische Wörter für die Übungen.`
+
+  const styleHint = style === 'form'
+    ? 'Überwiegend Lückentext ("cloze"): der Lerner setzt die richtige Form ein.'
+    : style === 'contrast'
+    ? 'Überwiegend Auswahl ("choice"): der Lerner wählt, WELCHE Form/Zeit/Variante hier richtig ist – es geht genau darum, den Unterschied zu erkennen. Erkläre bei jeder Übung, WARUM diese Variante passt und die andere(n) nicht.'
+    : 'Mische Lückentext ("cloze") und Auswahl ("choice"), je nachdem was für den Punkt am lehrreichsten ist.'
+
+  const prompt = `Du bist ein Französischlehrer und erstellst Grammatik-Übungen für einen deutschsprachigen Lerner (Niveau ca. B1–B2).
+
+Thema: ${path} — „${topic}".
+
+${wordsBlock}
+
+Aufgabe:
+1. "explanation": Erkläre GENAU DIESES Thema auf DEUTSCH, klar und kompakt: wann man es benutzt, wie man es bildet, Signalwörter/Merkregeln und typische Fehler. 4–8 Sätze. Nutze \\n für Absätze.
+2. "exercises": 5–6 Übungen auf FRANZÖSISCH, alle exakt zu diesem Thema. ${styleHint}
+
+Übungs-Typen:
+- "cloze": ein französischer Satz mit genau EINER Lücke, geschrieben als _____ (mehrere Unterstriche). "answer" = die exakte richtige Form (nur das eine Wort/die Wortgruppe für die Lücke). "hint" = kurzer deutscher Hinweis (z. B. Infinitiv + Person/Zeit). "explain" = kurze deutsche Begründung der Form.
+- "choice": ein französischer Satz oder eine Frage; "options" = 3–4 plausible Optionen; "correct" = Index (0-basiert) der EINEN richtigen Option; "explain" = deutsche Begründung, warum diese richtig ist und die anderen nicht.
+
+WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
+{"explanation":"...","exercises":[{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","hint":"aller, 1. Person Singular Futur simple","explain":"Signalwort „demain“ + einmalige Zukunft → Futur simple."},{"type":"choice","prompt":"Quand j'étais petit, je _____ souvent au parc.","options":["suis allé","allais","irai"],"correct":1,"explain":"Gewohnheit in der Vergangenheit → Imparfait („allais“)."}]}`
+
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.55 }))
+  const explanation = String(parsed?.explanation || '').trim()
+  const exercises = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
+    .map(e => {
+      const type = e && e.type === 'choice' ? 'choice' : 'cloze'
+      if (type === 'choice') {
+        const options = Array.isArray(e.options) ? e.options.map(o => String(o)) : []
+        const correct = Number(e.correct)
+        if (options.length < 2 || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
+        return { type, prompt: String(e.prompt || ''), options, correct, explain: String(e.explain || '') }
+      }
+      const answer = String(e.answer || '').trim()
+      const p = String(e.prompt || '')
+      if (!answer || !p.includes('_')) return null
+      return { type, prompt: p, answer, hint: String(e.hint || ''), explain: String(e.explain || '') }
+    })
+    .filter(Boolean)
+    .slice(0, 6)
+  if (!explanation || exercises.length === 0) throw new Error('Groq: Keine Grammatik-Übungen erzeugt')
+  return { explanation, exercises }
+}
