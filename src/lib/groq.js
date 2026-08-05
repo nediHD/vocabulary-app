@@ -665,11 +665,23 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
 // ob deutsche Hinweise mitgeliefert werden (Lernrunde ja, Testrunde nein).
 // Typen: choice (antippen, w1) · cloze mit 1+ Lücken (w2) · table (w3) ·
 //        transform (w3) · open (frei, KI-bewertet, w3)
-export async function generateGrammarSet({ path, topic, style = 'mixed', words = [], count = 10, withHints = true }) {
-  const wordList = (words || []).slice(0, 14).map(w => `"${w.french}" (${w.german})`).join(', ')
-  const wordsBlock = wordList
-    ? `Nutze BEVORZUGT diese Wörter des Lerners (ruhig gebeugt/konjugiert): ${wordList}. Passt eines nicht zum Thema, erfinde stattdessen passende, gängige französische Wörter.`
-    : `Erfinde passende, gängige französische Wörter für die Übungen.`
+export async function generateGrammarSet({ path, topic, style = 'mixed', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
+  const fmt = ws => (ws || []).slice(0, 10).map(w => `"${w.french}" (${w.german})`).join(', ')
+  const tW = fmt(targetWords)
+  const cW = fmt(contextWords)
+  const legacy = fmt(words)
+  let wordsBlock
+  if (tW || cW) {
+    wordsBlock = [
+      tW ? `ZIELWÖRTER (diese stehen im Fokus – konjugiere/beuge/teste sie): ${tW}.` : '',
+      cW ? `KONTEXTWÖRTER (baue sie in den Satz ein, ABER nur wo es NATÜRLICH passt – NICHT erzwingen; lieber weglassen als einen unnatürlichen Satz): ${cW}.` : '',
+      'Die Sätze müssen natürlich klingen. Passt ein Wort nicht, lass es weg und nimm stattdessen ein gängiges französisches Wort.',
+    ].filter(Boolean).join('\n')
+  } else if (legacy) {
+    wordsBlock = `Nutze BEVORZUGT diese Wörter des Lerners (ruhig gebeugt/konjugiert): ${legacy}. Passt eines nicht, erfinde ein passendes gängiges Wort.`
+  } else {
+    wordsBlock = `Erfinde passende, gängige französische Wörter für die Übungen.`
+  }
   const hintRule = withHints
     ? 'Gib bei Schreib-Übungen ein Feld "hint": ein kurzer deutscher Hinweis, der beim Lösen hilft (z. B. Infinitiv + Person/Zeit).'
     : 'KEINE Hinweise: lass "hint" weg oder leer.'
@@ -767,4 +779,31 @@ Richtige Lösung: "${String(correct || '')}"
 Antwort des Lerners: "${String(userAnswer || '(leer)')}"
 Erkläre auf DEUTSCH in 1–3 kurzen Sätzen, warum die Lernerantwort falsch ist und warum die richtige Lösung stimmt (bezieht sich auf die Grammatikregel/Endung).`
   return String(await callGroq(p, { maxTokens: 260, temperature: 0.3 })).trim()
+}
+
+// Klassifiziert französische Wörter nach Wortart (+ Genus bei Nomen, Verbgruppe bei Verben).
+// words: [{id, french, german}] -> [{id, wortart, genus, verbgruppe}]
+const WORTARTEN = ['Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Konjunktion', 'Pronomen', 'Ausdruck']
+export async function classifyWords(words) {
+  const list = (words || []).map(w => `${w.id}\t${w.french} (${w.german})`).join('\n')
+  if (!list) return []
+  const prompt = `Klassifiziere diese französischen Wörter (mit deutscher Bedeutung) nach Wortart.
+Wortart genau eine aus: ${WORTARTEN.join(', ')}.
+Bei Nomen: "genus" = "m" oder "f". Bei Verb: "verbgruppe" = "1" (-er), "2" (-ir/-issant) oder "3" (unregelmäßig/-re). Sonst genus/verbgruppe = null.
+Gib zu JEDEM die exakte id zurück.
+
+Antworte NUR mit gültigem JSON ohne Markdown:
+{"items":[{"id":"...","wortart":"Verb","genus":null,"verbgruppe":"1"}]}
+
+Wörter (id<TAB>wort):
+${list}`
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3000, temperature: 0 }))
+  return (Array.isArray(parsed?.items) ? parsed.items : [])
+    .map(it => ({
+      id: String(it.id || '').trim(),
+      wortart: WORTARTEN.includes(it.wortart) ? it.wortart : 'Sonstiges',
+      genus: it.genus === 'm' || it.genus === 'f' ? it.genus : null,
+      verbgruppe: ['1', '2', '3'].includes(String(it.verbgruppe)) ? String(it.verbgruppe) : null,
+    }))
+    .filter(it => it.id)
 }

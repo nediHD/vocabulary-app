@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQueue } from '../lib/grammarSrs'
+import { ensureWortarten } from '../lib/classify'
 
 export default function Dashboard({ setView, setInSession }) {
   const [stats, setStats] = useState({
@@ -14,6 +15,7 @@ export default function Dashboard({ setView, setInSession }) {
 
   useEffect(() => {
     fetchStats()
+    ensureWortarten() // Wortarten der Wörter einmalig im Hintergrund bestimmen
   }, [])
 
   const fetchStats = async () => {

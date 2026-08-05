@@ -88,3 +88,25 @@ export function topicMode(progressRow) {
   if (!progressRow || progressRow.status === 'learning') return 'guided'
   return 'test'
 }
+
+// Welche Wortart soll bei einem Thema das ZIELWORT sein (zum Konjugieren/Beugen/Testen)?
+// null = kein spezielles Ziel (alle Wörter dienen als Kontext).
+const SECTION_TARGET = {
+  verben: 'Verb',
+  nomen: 'Nomen',
+  adjektive: 'Adjektiv',
+  adverbien: 'Adverb',
+  praepositionen: 'Verb', // feste Verb-Präposition-Verbindungen
+}
+export function targetPosForItem(item) {
+  return SECTION_TARGET[item.sectionId] || null
+}
+
+// Teilt die Wörter des Lerners in Zielwörter (passende Wortart) und Kontextwörter (Rest).
+export function splitWords(words, targetPos) {
+  const ws = words || []
+  if (!targetPos) return { targetWords: [], contextWords: ws.slice(0, 10) }
+  const target = ws.filter(w => w.wortart === targetPos)
+  const context = ws.filter(w => w.wortart !== targetPos)
+  return { targetWords: target.slice(0, 10), contextWords: context.slice(0, 10) }
+}

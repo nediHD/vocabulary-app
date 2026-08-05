@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { ensureWortarten } from '../lib/classify'
+
+const WORTARTEN = ['Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Konjunktion', 'Pronomen', 'Ausdruck', 'Sonstiges']
 
 export default function ManageWords({ setView }) {
   const [words, setWords] = useState([])
@@ -9,7 +12,13 @@ export default function ManageWords({ setView }) {
 
   useEffect(() => {
     fetchWords()
+    ensureWortarten().then(fetchWords) // fehlende Wortarten bestimmen, dann aktualisieren
   }, [])
+
+  const updateWortart = async (id, wortart) => {
+    setWords(ws => ws.map(w => (w.id === id ? { ...w, wortart } : w)))
+    await supabase.from('cards').update({ wortart }).eq('id', id)
+  }
 
   const fetchWords = async () => {
     try {
@@ -59,6 +68,7 @@ export default function ManageWords({ setView }) {
       setGerman('')
       setFrench('')
       await fetchWords()
+      ensureWortarten().then(fetchWords) // neues Wort im Hintergrund klassifizieren
     } catch (err) {
       console.error('Error:', err)
       alert('Fehler beim Hinzufügen des Wortes.')
@@ -190,7 +200,19 @@ export default function ManageWords({ setView }) {
                 <div className="sm:hidden text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
                   Französisch
                 </div>
-                <div style={{ color: 'var(--ink-soft)' }}>{word.french}</div>
+                <div className="flex flex-col gap-1" style={{ color: 'var(--ink-soft)' }}>
+                  <span>{word.french}</span>
+                  <select
+                    value={word.wortart || ''}
+                    onChange={e => updateWortart(word.id, e.target.value)}
+                    className="w-fit rounded-md border px-1.5 py-0.5 text-xs outline-none"
+                    style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)', color: word.wortart ? 'var(--blue-dark)' : 'var(--ink-faint)' }}
+                    title="Wortart"
+                  >
+                    <option value="">Wortart …</option>
+                    {WORTARTEN.map(wa => <option key={wa} value={wa}>{wa}</option>)}
+                  </select>
+                </div>
 
                 <div className="sm:hidden text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
                   Status

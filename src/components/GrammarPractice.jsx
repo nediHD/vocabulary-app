@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Explanation, Marked, useTheory } from './Grammar'
 import { generateGrammarSet, gradeOpenAnswer, explainGrammarWrong } from '../lib/groq'
-import { buildQueue, nextSchedule, topicMode, todayStr, MAX_NEW_PER_DAY } from '../lib/grammarSrs'
+import { buildQueue, nextSchedule, topicMode, todayStr, MAX_NEW_PER_DAY, targetPosForItem, splitWords } from '../lib/grammarSrs'
 
 // ── Antwortprüfung: Akzente streng, aber Groß/Klein, Bindestriche & Satzzeichen egal ──
 function norm(s) {
@@ -315,10 +315,14 @@ const ErrCard = ({ msg, onRetry }) => (
 )
 
 async function genMany(item, words, target, withHints) {
+  const { targetWords, contextWords } = splitWords(words, targetPosForItem(item))
   const acc = []
   let guard = 0
   while (acc.length < target && guard++ < 3) {
-    const batch = await generateGrammarSet({ path: `${item.sectionName} › ${item.groupName}`, topic: item.name, style: item.style, words, count: Math.min(10, target - acc.length), withHints })
+    const batch = await generateGrammarSet({
+      path: `${item.sectionName} › ${item.groupName}`, topic: item.name, style: item.style,
+      targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
+    })
     acc.push(...batch)
   }
   return acc.slice(0, target)
@@ -443,7 +447,7 @@ export default function GrammarPractice({ setView }) {
     setPhase('loading')
     const [{ data: pr }, { data: wd }] = await Promise.all([
       supabase.from('grammar_progress').select('*'),
-      supabase.from('cards').select('german, french, status').eq('status', 'review').limit(80),
+      supabase.from('cards').select('german, french, status, wortart, genus, verbgruppe').eq('status', 'review').limit(80),
     ])
     const progress = pr || []
     setRows(progress)
