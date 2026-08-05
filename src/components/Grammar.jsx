@@ -63,6 +63,15 @@ function Explanation({ data, text }) {
           </div>
         )}
 
+        {Array.isArray(data.exceptions) && data.exceptions.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Ausnahmen</div>
+            <div className="flex flex-wrap gap-2">
+              {data.exceptions.map((f, i) => <span key={i} className="gr-form"><Marked text={f} /></span>)}
+            </div>
+          </div>
+        )}
+
         {data.mistake && (
           <div className="rounded-xl px-3 py-2 text-sm" style={{ backgroundColor: 'rgba(201,130,10,0.12)', color: 'var(--ink)' }}>
             <span style={{ color: '#c9820a', fontWeight: 700 }}>⚠️ Fehler</span> · <Marked text={data.mistake} />
