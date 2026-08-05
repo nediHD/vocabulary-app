@@ -10,45 +10,129 @@ export function Marked({ text }) {
   )
 }
 
+// Ein französisches Beispiel: „Le café. — Der Kaffee." Der Teil nach „ — " ist die
+// deutsche Übersetzung und wird gedämpft dargestellt; der französische Teil bekommt
+// die ~Endungs~-Farbe.
+function ExLine({ text }) {
+  const s = String(text ?? '')
+  const m = s.split(/\s+—\s+/)
+  const fr = m[0]
+  const de = m.length > 1 ? m.slice(1).join(' — ') : ''
+  return (
+    <div className="flex gap-2 text-[14px] leading-relaxed">
+      <span className="flex-none select-none" style={{ color: 'var(--blue)' }}>•</span>
+      <span>
+        <span style={{ color: 'var(--ink)' }}><Marked text={fr} /></span>
+        {de && <span style={{ color: 'var(--ink-faint)' }}>{'  — '}{de}</span>}
+      </span>
+    </div>
+  )
+}
+
+// Kleiner Baustein: eine deutsche Erklärung + darunter französische Beispiele.
+function Block({ label, explain, examples, labelColor = 'var(--blue-dark)' }) {
+  const ex = Array.isArray(examples) ? examples : (examples ? [examples] : [])
+  return (
+    <div>
+      {label && <div className="font-semibold text-[15px]" style={{ color: labelColor }}>{label}</div>}
+      {explain && <div className="mt-0.5 text-[14px] leading-relaxed" style={{ color: 'var(--ink)' }}><Marked text={explain} /></div>}
+      {ex.length > 0 && (
+        <div className="mt-1.5 flex flex-col gap-1 border-l-2 pl-3" style={{ borderColor: 'var(--blue-tint-line)' }}>
+          {ex.map((e, i) => <ExLine key={i} text={e} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SectionHead({ children }) {
+  return (
+    <div className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>{children}</div>
+  )
+}
+
+// Normalisiert Ausnahmen/Fehler: alte Form (String[]) → ein Block mit Beispielen;
+// neue Form ([{explain, examples}]) → unverändert.
+function normBlocks(arr) {
+  if (!Array.isArray(arr)) return []
+  const strings = arr.filter(x => typeof x === 'string')
+  const objects = arr.filter(x => x && typeof x === 'object')
+  const out = objects.map(o => ({ explain: o.explain || o.label || '', examples: o.examples || [] }))
+  if (strings.length) out.unshift({ explain: '', examples: strings })
+  return out
+}
+
 // Strukturierte Erklärung (aus DB `data`), Fallback: reiner Text.
 export function Explanation({ data, text }) {
   if (data && typeof data === 'object') {
+    const uses = Array.isArray(data.uses) ? data.uses : []
     const forms = Array.isArray(data.forms) ? data.forms : []
     const signals = Array.isArray(data.signals) ? data.signals : []
-    const exceptions = Array.isArray(data.exceptions) ? data.exceptions : []
+    const exceptions = normBlocks(data.exceptions)
+    const mistakes = Array.isArray(data.mistakes)
+      ? normBlocks(data.mistakes)
+      : (data.mistake ? [{ explain: '', examples: [data.mistake] }] : [])
+
     return (
-      <div className="rounded-3xl border p-5" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
-        {data.when && (
-          <div className="mb-4">
-            <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Wann</div>
-            <div className="text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>{data.when}</div>
+      <div className="flex flex-col gap-5 rounded-3xl border p-5" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
+        {/* WANN */}
+        {(data.when || uses.length > 0 || signals.length > 0) && (
+          <div>
+            <SectionHead>Wann benutze ich das?</SectionHead>
+            {data.when && <div className="mb-3 text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}><Marked text={data.when} /></div>}
+            {uses.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {uses.map((u, i) => <Block key={i} label={u.label} explain={u.explain} examples={u.examples} />)}
+              </div>
+            )}
             {signals.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {signals.map((s, i) => <span key={i} className="gr-chip">{s}</span>)}
+              <div className="mt-3">
+                <div className="mb-1 text-[13px]" style={{ color: 'var(--ink-soft)' }}>Signalwörter:</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {signals.map((s, i) => <span key={i} className="gr-chip">{s}</span>)}
+                </div>
               </div>
             )}
           </div>
         )}
+
+        {/* BILDUNG */}
         {(data.build || forms.length > 0) && (
-          <div className="mb-4">
-            <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
-              Bildung{data.formsLabel ? ` · ${data.formsLabel}` : ''}
-            </div>
-            {data.build && <div className="mb-2 text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}><Marked text={data.build} /></div>}
+          <div>
+            <SectionHead>Bildung{data.formsLabel ? ` · ${data.formsLabel}` : ''}</SectionHead>
+            {data.build && <div className="mb-2.5 text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}><Marked text={data.build} /></div>}
             {forms.length > 0 && (
               <div className="flex flex-wrap gap-2">{forms.map((f, i) => <span key={i} className="gr-form"><Marked text={f} /></span>)}</div>
             )}
           </div>
         )}
+
+        {/* AUSNAHMEN */}
         {exceptions.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Ausnahmen</div>
-            <div className="flex flex-wrap gap-2">{exceptions.map((f, i) => <span key={i} className="gr-form"><Marked text={f} /></span>)}</div>
+          <div>
+            <SectionHead>Ausnahmen &amp; Besonderheiten</SectionHead>
+            <div className="flex flex-col gap-3">
+              {exceptions.map((e, i) => <Block key={i} explain={e.explain} examples={e.examples} />)}
+            </div>
           </div>
         )}
-        {data.mistake && (
-          <div className="rounded-xl px-3 py-2 text-sm" style={{ backgroundColor: 'rgba(201,130,10,0.12)', color: 'var(--ink)' }}>
-            <span style={{ color: '#c9820a', fontWeight: 700 }}>⚠️ Fehler</span> · <Marked text={data.mistake} />
+
+        {/* FEHLER */}
+        {mistakes.length > 0 && (
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(201,130,10,0.12)' }}>
+            <div className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: '#b5760a' }}>⚠️ Häufiger Fehler</div>
+            <div className="flex flex-col gap-3">
+              {mistakes.map((m, i) => (
+                <div key={i}>
+                  {m.explain && <div className="text-[14px] leading-relaxed" style={{ color: 'var(--ink)' }}><Marked text={m.explain} /></div>}
+                  {Array.isArray(m.examples) && m.examples.length > 0 && (
+                    <div className="mt-1.5 flex flex-col gap-1 border-l-2 pl-3" style={{ borderColor: 'rgba(201,130,10,0.35)' }}>
+                      {m.examples.map((e, j) => <ExLine key={j} text={e} />)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
