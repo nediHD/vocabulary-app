@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ensureWortarten } from '../lib/classify'
 
 const WORTARTEN = ['Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Konjunktion', 'Pronomen', 'Ausdruck', 'Sonstiges']
 
@@ -12,7 +11,6 @@ export default function ManageWords({ setView }) {
 
   useEffect(() => {
     fetchWords()
-    ensureWortarten().then(fetchWords) // fehlende Wortarten bestimmen, dann aktualisieren
   }, [])
 
   const updateWortart = async (id, wortart) => {
@@ -68,7 +66,6 @@ export default function ManageWords({ setView }) {
       setGerman('')
       setFrench('')
       await fetchWords()
-      ensureWortarten().then(fetchWords) // neues Wort im Hintergrund klassifizieren
     } catch (err) {
       console.error('Error:', err)
       alert('Fehler beim Hinzufügen des Wortes.')
