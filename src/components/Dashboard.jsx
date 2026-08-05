@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { buildQueue } from '../lib/grammarSrs'
 
 export default function Dashboard({ setView, setInSession }) {
   const [stats, setStats] = useState({
@@ -8,6 +9,7 @@ export default function Dashboard({ setView, setInSession }) {
     review: 0,
     dueToday: 0,
   })
+  const [grammar, setGrammar] = useState({ due: 0, fresh: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -19,9 +21,10 @@ export default function Dashboard({ setView, setInSession }) {
       setLoading(true)
       const now = new Date().toISOString()
 
-      const { data, error } = await supabase
-        .from('cards')
-        .select('id, status, next_review_at')
+      const [{ data, error }, { data: gp }] = await Promise.all([
+        supabase.from('cards').select('id, status, next_review_at'),
+        supabase.from('grammar_progress').select('*'),
+      ])
 
       if (error) {
         console.error('Error fetching stats:', error)
@@ -36,12 +39,19 @@ export default function Dashboard({ setView, setInSession }) {
       ).length
 
       setStats({ total, learning, review, dueToday })
+
+      const plan = buildQueue(gp || [], new Date())
+      setGrammar({ due: plan.counts.due, fresh: plan.fresh.length })
     } catch (err) {
       console.error('Error:', err)
     } finally {
       setLoading(false)
     }
   }
+
+  const sectionLabel = txt => (
+    <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>{txt}</div>
+  )
 
   const handleStartLearning = () => {
     if (stats.learning === 0) {
@@ -90,6 +100,7 @@ export default function Dashboard({ setView, setInSession }) {
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-3">
+        {sectionLabel('Vokabeln')}
         <button
           onClick={handleStartLearning}
           className="aurora-cta lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold text-white sm:h-16"
@@ -117,6 +128,27 @@ export default function Dashboard({ setView, setInSession }) {
           </span>
         </button>
 
+        {sectionLabel('Grammatik')}
+        <button
+          onClick={() => setView('grammar-practice')}
+          className="aurora-cta lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold text-white sm:h-16"
+        >
+          <span>Grammatik üben 📐</span>
+          <span className="font-mono text-sm opacity-80">
+            {grammar.due + grammar.fresh > 0 ? `${grammar.due} fällig · ${grammar.fresh} neu →` : 'Erledigt →'}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setView('grammar')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--line-soft)', color: 'var(--ink)' }}
+        >
+          <span>Grammatik nachschlagen 📖</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>Theorie →</span>
+        </button>
+
+        {sectionLabel('Weiteres')}
         <button
           onClick={() => setView('audio')}
           className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
@@ -144,21 +176,6 @@ export default function Dashboard({ setView, setInSession }) {
           <span>Lückentext ✏️</span>
           <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
             Text schreiben →
-          </span>
-        </button>
-
-        <button
-          onClick={() => setView('grammar')}
-          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--line-soft)',
-            color: 'var(--ink)',
-          }}
-        >
-          <span>Grammatik 📐</span>
-          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Alle Themen →
           </span>
         </button>
 

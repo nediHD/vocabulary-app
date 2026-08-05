@@ -659,3 +659,112 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
   if (exercises.length === 0) throw new Error('Groq: Keine Grammatik-Übungen erzeugt')
   return { exercises }
 }
+
+// Reicher Übungssatz für das Grammatik-Lernsystem: gemischte, GEWICHTETE Typen,
+// schwer (B2–C1), mit den Wiederholungs-Wörtern des Lerners. withHints steuert,
+// ob deutsche Hinweise mitgeliefert werden (Lernrunde ja, Testrunde nein).
+// Typen: choice (antippen, w1) · cloze mit 1+ Lücken (w2) · table (w3) ·
+//        transform (w3) · open (frei, KI-bewertet, w3)
+export async function generateGrammarSet({ path, topic, style = 'mixed', words = [], count = 10, withHints = true }) {
+  const wordList = (words || []).slice(0, 14).map(w => `"${w.french}" (${w.german})`).join(', ')
+  const wordsBlock = wordList
+    ? `Nutze BEVORZUGT diese Wörter des Lerners (ruhig gebeugt/konjugiert): ${wordList}. Passt eines nicht zum Thema, erfinde stattdessen passende, gängige französische Wörter.`
+    : `Erfinde passende, gängige französische Wörter für die Übungen.`
+  const hintRule = withHints
+    ? 'Gib bei Schreib-Übungen ein Feld "hint": ein kurzer deutscher Hinweis, der beim Lösen hilft (z. B. Infinitiv + Person/Zeit).'
+    : 'KEINE Hinweise: lass "hint" weg oder leer.'
+
+  const prompt = `Du bist ein strenger Französischlehrer und erstellst ANSPRUCHSVOLLE Grammatik-Übungen (Niveau B2–C1) für einen deutschsprachigen Lerner.
+
+Thema: ${path} — „${topic}".
+${wordsBlock}
+
+Erzeuge ${count} Übungen, ABWECHSLUNGSREICH gemischt und passend zum Thema (v. a. Endungen/Regel testen). Sätze sollen realistisch und nicht trivial sein, Auswahl-Optionen plausibel (nicht offensichtlich).
+
+Typen (mische sie, nicht nur einen):
+- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4, "correct" Index (0-basiert) der EINEN richtigen, "explain" deutsche Begründung.
+- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~Endung~ markiert","hint":"deutscher Hinweis"}. "explain" deutsche Begründung.
+- "table" (Konjugation): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.
+- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint", "explain".
+- "open" (frei, wird von einer KI bewertet): "prompt" eine anspruchsvollere Aufgabe, bei der der Lerner selbst einen Satz auf Französisch bildet (z. B. "Bilde einen Satz mit … im Subjonctif"). "sample" eine Musterlösung, "explain" worauf es ankommt.
+
+${hintRule}
+Regeln: eindeutige Lösungen (bei cloze/table/transform). Markiere in display/answer_display nur den relevanten Teil (Endung) mit ~Tilden~.
+
+Antworte NUR mit gültigem JSON ohne Markdown:
+{"exercises":[{"type":"cloze","prompt":"Hier, il _____ au marché et nous _____ à la maison.","blanks":[{"answer":"est allé","display":"est all~é~","hint":"aller, Passé composé, il"},{"answer":"sommes restés","display":"sommes rest~és~","hint":"rester, Passé composé, nous"}],"explain":"Beide einmalige Handlungen → Passé composé; être-Verben angeglichen."},{"type":"choice","prompt":"Je cherche la maison _____ mes grands-parents ont vécu.","options":["que","dont","où","qui"],"correct":2,"explain":"Ort → où."},{"type":"open","prompt":"Bilde einen Satz mit „bien que" + Subjonctif.","sample":"Bien qu'il soit fatigué, il travaille.","explain":"Nach bien que steht der Subjonctif."}]}`
+
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3600, temperature: 0.6 }))
+  const out = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
+    .map(e => {
+      if (!e || typeof e !== 'object') return null
+      const t = e.type
+      if (t === 'choice') {
+        const options = Array.isArray(e.options) ? e.options.map(o => String(o)) : []
+        const correct = Number(e.correct)
+        if (options.length < 2 || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
+        return { type: 'choice', prompt: String(e.prompt || ''), options, correct, explain: String(e.explain || ''), weight: 1 }
+      }
+      if (t === 'table') {
+        const rows = (Array.isArray(e.rows) ? e.rows : [])
+          .map(r => ({ p: String(r.p || '').trim(), answer: String(r.answer || '').trim(), display: String(r.display || r.answer || '').trim() }))
+          .filter(r => r.p && r.answer)
+        if (rows.length < 2) return null
+        return { type: 'table', verb: String(e.verb || ''), label: String(e.label || ''), rows: rows.slice(0, 6), weight: 3 }
+      }
+      if (t === 'transform') {
+        const answer = String(e.answer || '').trim()
+        const p = String(e.prompt || '').trim()
+        if (!answer || !p) return null
+        return { type: 'transform', prompt: p, answer, answer_display: String(e.answer_display || answer), hint: withHints ? String(e.hint || '') : '', explain: String(e.explain || ''), weight: 3 }
+      }
+      if (t === 'open') {
+        const p = String(e.prompt || '').trim()
+        if (!p) return null
+        return { type: 'open', prompt: p, sample: String(e.sample || ''), explain: String(e.explain || ''), weight: 3 }
+      }
+      // default: cloze (1+ Lücken)
+      const p = String(e.prompt || '')
+      let blanks = Array.isArray(e.blanks) ? e.blanks : null
+      if (!blanks && e.answer) blanks = [{ answer: e.answer, display: e.answer_display || e.answer, hint: e.hint }]
+      blanks = (blanks || [])
+        .map(b => ({ answer: String(b.answer || '').trim(), display: String(b.display || b.answer || '').trim(), hint: withHints ? String(b.hint || '') : '' }))
+        .filter(b => b.answer)
+      if (!p.includes('_') || blanks.length === 0) return null
+      return { type: 'cloze', prompt: p, blanks, explain: String(e.explain || ''), weight: 2 }
+    })
+    .filter(Boolean)
+    .slice(0, count)
+  if (out.length === 0) throw new Error('Groq: Keine Grammatik-Übungen erzeugt')
+  return out
+}
+
+// KI bewertet eine freie („open") Antwort. Gibt { correct, feedback(DE) } zurück.
+export async function gradeOpenAnswer({ path, topic, prompt, sample, userAnswer }) {
+  const ua = String(userAnswer || '').trim().slice(0, 400)
+  if (!ua) return { correct: false, feedback: 'Keine Antwort eingegeben.' }
+  const p = `Du bewertest die Antwort eines Lerners in einer französischen Grammatik-Übung.
+Thema: ${path} — „${topic}".
+Aufgabe: "${String(prompt || '')}"
+Musterlösung (Beispiel): "${String(sample || '')}"
+Antwort des Lerners: "${ua}"
+
+Bewerte, ob die Antwort die Aufgabe grammatisch korrekt und passend zum Thema erfüllt (kleine Tippfehler bei Akzenten NICHT hart bewerten). Antworte NUR mit JSON:
+{"correct": true/false, "feedback": "1-2 kurze deutsche Sätze: was gut/falsch war, ggf. Korrektur"}`
+  try {
+    const parsed = parseGroqJSON(await callGroq(p, { maxTokens: 250, temperature: 0.2 }))
+    return { correct: !!parsed.correct, feedback: String(parsed.feedback || '').trim() }
+  } catch {
+    return { correct: false, feedback: 'Bewertung nicht möglich.' }
+  }
+}
+
+// „Warum falsch?" für eine Grammatik-Übung – erklärt auf Deutsch den Fehler.
+export async function explainGrammarWrong({ path, topic, prompt, correct, userAnswer }) {
+  const p = `Ein Lerner hat bei einer Grammatik-Übung (Thema: ${path} — „${topic}") falsch geantwortet.
+Aufgabe: "${String(prompt || '')}"
+Richtige Lösung: "${String(correct || '')}"
+Antwort des Lerners: "${String(userAnswer || '(leer)')}"
+Erkläre auf DEUTSCH in 1–3 kurzen Sätzen, warum die Lernerantwort falsch ist und warum die richtige Lösung stimmt (bezieht sich auf die Grammatikregel/Endung).`
+  return String(await callGroq(p, { maxTokens: 260, temperature: 0.3 })).trim()
+}
