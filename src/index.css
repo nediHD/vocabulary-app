@@ -89,6 +89,47 @@
   box-shadow: 0 20px 40px -16px rgba(75, 90, 240, 0.55);
 }
 
+/* ── Globaler Button-Hover: Zeiger + sichtbarer Effekt auf JEDEM Button ── */
+button {
+  transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, opacity 0.16s ease;
+}
+button:not(:disabled) { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+/* .lift-Buttons behalten ihren eigenen (stärkeren) Hover; alle anderen bekommen einen dezenten */
+button:not(:disabled):not(.lift):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+button:not(:disabled):not(.lift):active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):not(.lift):hover { transform: none; }
+}
+
+/* ── Strukturierte Grammatik-Erklärung: farbige Endungen ── */
+.gr-mark { color: var(--blue-dark); font-weight: 700; }
+.gr-chip {
+  display: inline-block;
+  border-radius: 9999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  background: var(--blue-tint);
+  color: var(--blue-dark);
+  border: 1px solid var(--blue-tint-line);
+}
+.gr-form {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 4px 10px;
+}
+
 /* ── Genutzte Dienste: Karten-Galerie + Aurora-Akkordeon (②) ── */
 /* Eingangs-Animation: läuft, sobald die Seite geöffnet wird */
 @keyframes svcIn {

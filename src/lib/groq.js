@@ -596,11 +596,14 @@ export async function generateGrammarExercises({ path, topic, style = 'mixed', w
     ? `Der Lerner wiederholt gerade diese eigenen Wörter – BAUE SIE BEVORZUGT in die Übungen ein, wo sie inhaltlich passen (ruhig gebeugt/konjugiert, wie der Satz es verlangt). Passt ein Wort nicht zum Thema, lass es weg und erfinde stattdessen passende, einfache französische Wörter:\n${wordList}`
     : `Der Lerner hat gerade keine Wiederholungs-Wörter. Erfinde selbst passende, einfache und gängige französische Wörter für die Übungen.`
 
-  const styleHint = style === 'form'
-    ? 'Überwiegend Lückentext ("cloze"): der Lerner setzt die richtige Form ein.'
-    : style === 'contrast'
-    ? 'Überwiegend Auswahl ("choice"): der Lerner wählt, WELCHE Form/Zeit/Variante hier richtig ist – es geht genau darum, den Unterschied zu erkennen. Erkläre bei jeder Übung, WARUM diese Variante passt und die andere(n) nicht.'
-    : 'Mische Lückentext ("cloze") und Auswahl ("choice"), je nachdem was für den Punkt am lehrreichsten ist.'
+  const isVerbTense = /Verben/.test(path) && !/vs\.|Passiv|Pronominale|Faire|Si-Sätze|Accord/.test(topic)
+  const styleHint = style === 'contrast'
+    ? 'Schwerpunkt: „choice"-Übungen (den Unterschied erkennen). Dazu 1 „transform". Erkläre bei jeder, WARUM diese Variante passt und die andere(n) nicht.'
+    : isVerbTense
+    ? 'Beginne mit GENAU EINER „table" (alle 6 Formen eines Verbs in dieser Zeit). Dazu „cloze“ und 1 „transform“.'
+    : style === 'form'
+    ? 'Schwerpunkt „cloze“ (Form einsetzen). Wo sinnvoll 1 „transform“ oder 1 „choice“.'
+    : 'Mische „cloze“ und „choice“, wo sinnvoll 1 „transform“.'
 
   const prompt = `Du bist ein Französischlehrer und erstellst Grammatik-Übungen für einen deutschsprachigen Lerner (Niveau ca. B1–B2).
 
@@ -610,27 +613,46 @@ ${wordsBlock}
 
 Aufgabe: Erstelle "exercises" – 5–6 Übungen auf FRANZÖSISCH, alle exakt zu diesem Thema. ${styleHint}
 
-Übungs-Typen:
-- "cloze": ein französischer Satz mit genau EINER Lücke, geschrieben als _____ (mehrere Unterstriche). "answer" = die exakte richtige Form (nur das eine Wort/die Wortgruppe für die Lücke). "hint" = kurzer deutscher Hinweis (z. B. Infinitiv + Person/Zeit). "explain" = kurze deutsche Begründung der Form.
-- "choice": ein französischer Satz oder eine Frage; "options" = 3–4 plausible Optionen; "correct" = Index (0-basiert) der EINEN richtigen Option; "explain" = deutsche Begründung, warum diese richtig ist und die anderen nicht.
+Übungs-Typen (mische passend):
+- "cloze": französischer Satz mit genau EINER Lücke als _____ . "answer"=exakte richtige Form. "answer_display"=dieselbe Form, aber der WICHTIGE TEIL (Endung/geänderter Teil) in ~Tilden~ markiert (z. B. "ir~ai~", "parl~ait~", "petit~e~"). "hint"=kurzer deutscher Hinweis. "explain"=kurze deutsche Begründung.
+- "choice": Satz/Frage; "options"=3–4 Optionen; "correct"=Index (0-basiert) der EINEN richtigen; "explain"=deutsche Begründung, warum richtig und die anderen nicht.
+- "table": Konjugationstabelle. "verb"=Infinitiv, "label"=z. B. "Présent von parler". "rows"=genau 6 Objekte für je, tu, il/elle, nous, vous, ils/elles: {"p":"je","answer":"parle","display":"parl~e~"} (display markiert die Endung in ~Tilden~).
+- "transform": "prompt"=deutsche Anweisung + französischer Ausgangssatz (z. B. "Setze ins Imparfait: Je mange une pomme."). "answer"=der komplette umgeformte Satz. "answer_display"=derselbe Satz mit dem/den geänderten Wort-Teil(en) in ~Tilden~. "explain"=kurze deutsche Begründung.
+
+Regeln: genau EINE eindeutige Lösung pro Übung (keine mehrdeutigen Antworten). Markiere in "display"/"answer_display" möglichst nur die relevante Endung, nicht das ganze Wort.
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
-{"exercises":[{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","hint":"aller, 1. Person Singular Futur simple","explain":"Signalwort „demain“ + einmalige Zukunft → Futur simple."},{"type":"choice","prompt":"Quand j'étais petit, je _____ souvent au parc.","options":["suis allé","allais","irai"],"correct":1,"explain":"Gewohnheit in der Vergangenheit → Imparfait („allais“)."}]}`
+{"exercises":[{"type":"table","verb":"parler","label":"Présent von parler","rows":[{"p":"je","answer":"parle","display":"parl~e~"},{"p":"tu","answer":"parles","display":"parl~es~"},{"p":"il/elle","answer":"parle","display":"parl~e~"},{"p":"nous","answer":"parlons","display":"parl~ons~"},{"p":"vous","answer":"parlez","display":"parl~ez~"},{"p":"ils/elles","answer":"parlent","display":"parl~ent~"}]},{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","answer_display":"ir~ai~","hint":"aller, 1. P. Sg. Futur simple","explain":"„demain“ + einmalige Zukunft → Futur simple."},{"type":"transform","prompt":"Setze ins Imparfait: Nous mangeons ensemble.","answer":"Nous mangions ensemble.","answer_display":"Nous mang~ions~ ensemble.","explain":"Imparfait-Endung -ions bei nous."}]}`
 
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.55 }))
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.5 }))
   const exercises = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
     .map(e => {
-      const type = e && e.type === 'choice' ? 'choice' : 'cloze'
-      if (type === 'choice') {
+      if (!e || typeof e !== 'object') return null
+      const t = e.type
+      if (t === 'choice') {
         const options = Array.isArray(e.options) ? e.options.map(o => String(o)) : []
         const correct = Number(e.correct)
         if (options.length < 2 || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
-        return { type, prompt: String(e.prompt || ''), options, correct, explain: String(e.explain || '') }
+        return { type: 'choice', prompt: String(e.prompt || ''), options, correct, explain: String(e.explain || '') }
       }
+      if (t === 'table') {
+        const rows = (Array.isArray(e.rows) ? e.rows : [])
+          .map(r => ({ p: String(r.p || '').trim(), answer: String(r.answer || '').trim(), display: String(r.display || r.answer || '').trim() }))
+          .filter(r => r.p && r.answer)
+        if (rows.length < 2) return null
+        return { type: 'table', verb: String(e.verb || ''), label: String(e.label || ''), rows: rows.slice(0, 6) }
+      }
+      if (t === 'transform') {
+        const answer = String(e.answer || '').trim()
+        const p = String(e.prompt || '').trim()
+        if (!answer || !p) return null
+        return { type: 'transform', prompt: p, answer, answer_display: String(e.answer_display || answer), explain: String(e.explain || '') }
+      }
+      // default: cloze
       const answer = String(e.answer || '').trim()
       const p = String(e.prompt || '')
       if (!answer || !p.includes('_')) return null
-      return { type, prompt: p, answer, hint: String(e.hint || ''), explain: String(e.explain || '') }
+      return { type: 'cloze', prompt: p, answer, answer_display: String(e.answer_display || answer), hint: String(e.hint || ''), explain: String(e.explain || '') }
     })
     .filter(Boolean)
     .slice(0, 6)

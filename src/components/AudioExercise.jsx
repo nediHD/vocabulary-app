@@ -537,16 +537,32 @@ export default function AudioExercise({ setView, setInSession }) {
                 <button
                   key={ex.id}
                   onClick={() => enterExercise(ex.id)}
-                  className="w-full text-left rounded-2xl border p-4 transition-colors"
+                  className="flex w-full items-center gap-3 text-left rounded-2xl border p-3 transition-colors"
                   style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--line-soft)'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--surface)'}
                 >
-                  <div className="font-medium truncate" style={{ color: 'var(--ink)' }}>
-                    {ex.title || ex.url}
+                  <div
+                    className="relative flex-none overflow-hidden rounded-xl"
+                    style={{ width: 104, aspectRatio: '16 / 9', backgroundColor: 'var(--line-soft)' }}
+                  >
+                    {ex.video_id && (
+                      <img
+                        src={`https://img.youtube.com/vi/${ex.video_id}/mqdefault.jpg`}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
                   </div>
-                  <div className="text-xs mt-1" style={{ color: 'var(--ink-faint)' }}>
-                    Abschnitt {Math.min((ex.last_seg_idx || 0) + 1, ex.seg_count)} / {ex.seg_count}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate" style={{ color: 'var(--ink)' }}>
+                      {ex.title || ex.url}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--ink-faint)' }}>
+                      Abschnitt {Math.min((ex.last_seg_idx || 0) + 1, ex.seg_count)} / {ex.seg_count}
+                    </div>
                   </div>
                 </button>
               ))}
