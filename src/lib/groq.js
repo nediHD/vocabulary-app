@@ -665,50 +665,64 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
 // ob deutsche Hinweise mitgeliefert werden (Lernrunde ja, Testrunde nein).
 // Typen: choice (antippen, w1) · cloze mit 1+ Lücken (w2) · table (w3) ·
 //        transform (w3) · open (frei, KI-bewertet, w3)
-export async function generateGrammarSet({ path, topic, style = 'mixed', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
+export async function generateGrammarSet({ path, topic, style = 'mixed', sectionId = '', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
   const fmt = ws => (ws || []).slice(0, 10).map(w => `"${w.french}" (${w.german})`).join(', ')
   const tW = fmt(targetWords)
   const cW = fmt(contextWords)
   const legacy = fmt(words)
+  // Konjugationstabelle (6 Personen) NUR bei Verbzeiten/-modi sinnvoll.
+  const allowTable = sectionId === 'verben'
   let wordsBlock
   if (tW || cW) {
     wordsBlock = [
-      tW ? `ZIELWÖRTER (diese stehen im Fokus – konjugiere/beuge/teste sie): ${tW}.` : '',
-      cW ? `KONTEXTWÖRTER (baue sie in den Satz ein, ABER nur wo es NATÜRLICH passt – NICHT erzwingen; lieber weglassen als einen unnatürlichen Satz): ${cW}.` : '',
-      'Die Sätze müssen natürlich klingen. Passt ein Wort nicht, lass es weg und nimm stattdessen ein gängiges französisches Wort.',
+      tW ? `ZIELWÖRTER des Lerners (bevorzugt einbauen, passend zur Regel beugen/testen): ${tW}.` : '',
+      cW ? `KONTEXTWÖRTER (nur als Umgebung/Nomen im Satz, NIE als das getestete Element, und NUR wenn sie NATÜRLICH passen): ${cW}.` : '',
+      'Wenn ein Wort des Lerners nicht natürlich in eine Übung zu DIESEM Thema passt, LASS ES WEG und nimm ein einfaches, gängiges französisches Wort. Erzwinge nie ein unpassendes Wort.',
     ].filter(Boolean).join('\n')
   } else if (legacy) {
-    wordsBlock = `Nutze BEVORZUGT diese Wörter des Lerners (ruhig gebeugt/konjugiert): ${legacy}. Passt eines nicht, erfinde ein passendes gängiges Wort.`
+    wordsBlock = `Nutze BEVORZUGT diese Wörter des Lerners, aber nur wo sie natürlich passen: ${legacy}. Sonst gängige Wörter erfinden.`
   } else {
-    wordsBlock = `Erfinde passende, gängige französische Wörter für die Übungen.`
+    wordsBlock = `Erfinde passende, gängige, EINFACHE französische Wörter für den Satzrahmen.`
   }
   const hintRule = withHints
-    ? 'Gib bei Schreib-Übungen ein Feld "hint": ein kurzer deutscher Hinweis, der beim Lösen hilft (z. B. Infinitiv + Person/Zeit).'
+    ? 'Gib bei Schreib-Übungen ein Feld "hint": ein KONKRETER, KORREKTER deutscher Hinweis zur jeweiligen Lücke (z. B. „Adjektiv an die richtige Stelle" oder „aller, Passé composé, il"). Keine allgemeinen/pauschalen Hinweise.'
     : 'KEINE Hinweise: lass "hint" weg oder leer.'
 
-  const prompt = `Du bist ein strenger Französischlehrer und erstellst ANSPRUCHSVOLLE Grammatik-Übungen (Niveau B2–C1) für einen deutschsprachigen Lerner.
+  const typeLines = [
+    '- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), "correct" Index (0-basiert) der EINEN richtigen. Gut für „welche Variante/Stellung/Form ist richtig?".',
+    '- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~markiertem Teil~","hint":"deutscher Hinweis"}.',
+    allowTable ? '- "table" (Verb-Konjugation, NUR bei Verbzeiten/-modi): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.' : '',
+    '- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".',
+    '- "open" (frei, KI-bewertet): "prompt" eine Aufgabe, bei der der Lerner selbst einen Satz bildet — die Aufgabe MUSS die Regel DIESES Themas üben. "sample" eine Musterlösung.',
+  ].filter(Boolean).join('\n')
 
-Thema: ${path} — „${topic}".
+  const prompt = `Du bist ein strenger Französischlehrer und erstellst ANSPRUCHSVOLLE, aber FAIRE Grammatik-Übungen (Niveau B1–B2) für einen deutschsprachigen Lerner.
+
+THEMA (nur darum geht es): ${path} — „${topic}".
+
+⛔ STRIKTE THEMENBINDUNG — die wichtigste Regel:
+- JEDE einzelne Übung muss GENAU die Regel dieses Themas prüfen: „${topic}".
+- Prüfe NICHTS anderes.${allowTable ? '' : ' KEINE Verbkonjugation, KEINE Zeitformen'} — kein fremdes Grammatikkapitel, kein reines Vokabelraten.
+- Geht es im Thema um STELLUNG / REIHENFOLGE / POSITION, dann teste die WORTSTELLUNG: der Lerner muss das Element (z. B. das Adjektiv) an die richtige Stelle setzen — nicht raten, welches Wort inhaltlich passt.
+- Jede Übung muss eine EINDEUTIGE Lösung haben, die sich aus der Regel ergibt. Keine Lücke, deren Antwort man nicht wissen kann.
+- Sätze kurz, klar, natürlich. Lieber einfache Sätze mit sauberer Regel als komplizierte, schiefe Sätze.
+
 ${wordsBlock}
 
-Erzeuge ${count} Übungen, ABWECHSLUNGSREICH gemischt und passend zum Thema (v. a. Endungen/Regel testen). Sätze sollen realistisch und nicht trivial sein, Auswahl-Optionen plausibel (nicht offensichtlich).
+Erzeuge ${count} Übungen, abwechslungsreich gemischt (verschiedene Typen), alle zum Thema „${topic}".
 
-Typen (mische sie, nicht nur einen):
-- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), "correct" Index (0-basiert) der EINEN richtigen.
-- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~Endung~ markiert","hint":"deutscher Hinweis"}.
-- "table" (Konjugation): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.
-- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".
-- "open" (frei, wird von einer KI bewertet): "prompt" eine anspruchsvollere Aufgabe, bei der der Lerner selbst einen Satz auf Französisch bildet (z. B. "Bilde einen Satz mit … im Subjonctif"). "sample" eine Musterlösung.
+Typen:
+${typeLines}
 
 PFLICHTFELDER für JEDE Übung:
-- "de": kurze, natürliche deutsche Übersetzung des französischen Satzes (bei "open" die schon deutsche Aufgabe kurz umschreiben; bei "table" die deutsche Bedeutung des Verbs). Der Lerner MUSS die Bedeutung des Satzes verstehen.
-- "explain": erkläre auf DEUTSCH WANN/WO und WARUM diese Form hier richtig ist — welche Situation, welcher Auslöser oder welches Signalwort sie verlangt — UND warum die naheliegende falsche Alternative hier NICHT passt. 1–2 klare Sätze; NICHT nur die Endung nennen, sondern die Regel/den Grund.
+- "de": kurze, natürliche deutsche Übersetzung des französischen Satzes (bei "open" die Aufgabe kurz umschreiben; bei "table" die deutsche Bedeutung des Verbs).
+- "explain": erkläre auf DEUTSCH WANN/WO und WARUM diese Lösung richtig ist (welche Regel/Situation) UND warum die naheliegende falsche Alternative hier NICHT passt. 1–2 klare Sätze, konkret zum Satz — nicht nur die Endung nennen.
 
 ${hintRule}
-Regeln: eindeutige Lösungen (bei cloze/table/transform). Markiere in display/answer_display nur den relevanten Teil (Endung) mit ~Tilden~.
+Markiere in display/answer_display nur den relevanten Teil mit ~Tilden~.
 
-Antworte NUR mit gültigem JSON ohne Markdown:
-{"exercises":[{"type":"cloze","prompt":"Hier, il _____ au marché et nous _____ à la maison.","de":"Gestern ging er zum Markt und wir blieben zu Hause.","blanks":[{"answer":"est allé","display":"est all~é~","hint":"aller, Passé composé, il"},{"answer":"sommes restés","display":"sommes rest~és~","hint":"rester, Passé composé, nous"}],"explain":"„Hier" (gestern) zeigt eine einmalige, abgeschlossene Handlung an → Passé composé, nicht Imparfait (das wäre nur für Gewohnheit/Beschreibung). être-Verben werden ans Subjekt angeglichen."},{"type":"choice","prompt":"Je cherche la maison _____ mes grands-parents ont vécu.","de":"Ich suche das Haus, in dem meine Großeltern gelebt haben.","options":["que","dont","où","qui"],"correct":2,"explain":"Es geht um einen ORT (das Haus, wo man wohnt) → où. „qui" wäre nur ein Subjekt, „que" ein direktes Objekt, „dont" bräuchte ein Verb mit de."}]}`
+Antworte NUR mit gültigem JSON ohne Markdown. Beispiel für das THEMA Adjektiv-Stellung (passe Inhalt an DEIN Thema an!):
+{"exercises":[{"type":"choice","prompt":"Welche Stellung ist richtig?","de":"ein rotes Auto","options":["une rouge voiture","une voiture rouge"],"correct":1,"explain":"Farben stehen IMMER nach dem Nomen → une voiture rouge. Vor dem Nomen (une rouge voiture) ist falsch — das gibt es nur bei kurzen BANGS-Adjektiven."},{"type":"cloze","prompt":"Stell das Adjektiv „petit" an die richtige Stelle: J'ai un _____ chien.","de":"Ich habe einen kleinen Hund.","blanks":[{"answer":"petit","display":"~petit~","hint":"BANGS-Adjektiv (Größe) → vor dem Nomen"}],"explain":"„petit" gehört zu den kurzen BANGS-Adjektiven (Size) und steht deshalb VOR dem Nomen: un petit chien. Nach dem Nomen (un chien petit) wäre falsch."}]}`
 
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3600, temperature: 0.6 }))
   // Option kann versehentlich als Objekt kommen ({text:…}/{option:…}) → sauberen String ziehen
@@ -729,6 +743,7 @@ Antworte NUR mit gültigem JSON ohne Markdown:
         return { type: 'choice', prompt: String(e.prompt || ''), de, options, correct, explain: String(e.explain || ''), weight: 1 }
       }
       if (t === 'table') {
+        if (!allowTable) return null // keine Verbkonjugation außerhalb der Verb-Kapitel
         const rows = (Array.isArray(e.rows) ? e.rows : [])
           .map(r => ({ p: String(r.p || '').trim(), answer: String(r.answer || '').trim(), display: String(r.display || r.answer || '').trim() }))
           .filter(r => r.p && r.answer)

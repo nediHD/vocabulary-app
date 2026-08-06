@@ -323,7 +323,7 @@ async function genMany(item, words, target, withHints) {
   while (acc.length < target && guard++ < 3) {
     const batch = await generateGrammarSet({
       path: `${item.sectionName} › ${item.groupName}`, topic: item.name, style: item.style,
-      targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
+      sectionId: item.sectionId, targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
     })
     acc.push(...batch)
   }
