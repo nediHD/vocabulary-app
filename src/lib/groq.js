@@ -694,46 +694,57 @@ ${wordsBlock}
 Erzeuge ${count} Übungen, ABWECHSLUNGSREICH gemischt und passend zum Thema (v. a. Endungen/Regel testen). Sätze sollen realistisch und nicht trivial sein, Auswahl-Optionen plausibel (nicht offensichtlich).
 
 Typen (mische sie, nicht nur einen):
-- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4, "correct" Index (0-basiert) der EINEN richtigen, "explain" deutsche Begründung.
-- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~Endung~ markiert","hint":"deutscher Hinweis"}. "explain" deutsche Begründung.
+- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), "correct" Index (0-basiert) der EINEN richtigen.
+- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~Endung~ markiert","hint":"deutscher Hinweis"}.
 - "table" (Konjugation): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.
-- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint", "explain".
-- "open" (frei, wird von einer KI bewertet): "prompt" eine anspruchsvollere Aufgabe, bei der der Lerner selbst einen Satz auf Französisch bildet (z. B. "Bilde einen Satz mit … im Subjonctif"). "sample" eine Musterlösung, "explain" worauf es ankommt.
+- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".
+- "open" (frei, wird von einer KI bewertet): "prompt" eine anspruchsvollere Aufgabe, bei der der Lerner selbst einen Satz auf Französisch bildet (z. B. "Bilde einen Satz mit … im Subjonctif"). "sample" eine Musterlösung.
+
+PFLICHTFELDER für JEDE Übung:
+- "de": kurze, natürliche deutsche Übersetzung des französischen Satzes (bei "open" die schon deutsche Aufgabe kurz umschreiben; bei "table" die deutsche Bedeutung des Verbs). Der Lerner MUSS die Bedeutung des Satzes verstehen.
+- "explain": erkläre auf DEUTSCH WANN/WO und WARUM diese Form hier richtig ist — welche Situation, welcher Auslöser oder welches Signalwort sie verlangt — UND warum die naheliegende falsche Alternative hier NICHT passt. 1–2 klare Sätze; NICHT nur die Endung nennen, sondern die Regel/den Grund.
 
 ${hintRule}
 Regeln: eindeutige Lösungen (bei cloze/table/transform). Markiere in display/answer_display nur den relevanten Teil (Endung) mit ~Tilden~.
 
 Antworte NUR mit gültigem JSON ohne Markdown:
-{"exercises":[{"type":"cloze","prompt":"Hier, il _____ au marché et nous _____ à la maison.","blanks":[{"answer":"est allé","display":"est all~é~","hint":"aller, Passé composé, il"},{"answer":"sommes restés","display":"sommes rest~és~","hint":"rester, Passé composé, nous"}],"explain":"Beide einmalige Handlungen → Passé composé; être-Verben angeglichen."},{"type":"choice","prompt":"Je cherche la maison _____ mes grands-parents ont vécu.","options":["que","dont","où","qui"],"correct":2,"explain":"Ort → où."},{"type":"open","prompt":"Bilde einen Satz mit „bien que" + Subjonctif.","sample":"Bien qu'il soit fatigué, il travaille.","explain":"Nach bien que steht der Subjonctif."}]}`
+{"exercises":[{"type":"cloze","prompt":"Hier, il _____ au marché et nous _____ à la maison.","de":"Gestern ging er zum Markt und wir blieben zu Hause.","blanks":[{"answer":"est allé","display":"est all~é~","hint":"aller, Passé composé, il"},{"answer":"sommes restés","display":"sommes rest~és~","hint":"rester, Passé composé, nous"}],"explain":"„Hier" (gestern) zeigt eine einmalige, abgeschlossene Handlung an → Passé composé, nicht Imparfait (das wäre nur für Gewohnheit/Beschreibung). être-Verben werden ans Subjekt angeglichen."},{"type":"choice","prompt":"Je cherche la maison _____ mes grands-parents ont vécu.","de":"Ich suche das Haus, in dem meine Großeltern gelebt haben.","options":["que","dont","où","qui"],"correct":2,"explain":"Es geht um einen ORT (das Haus, wo man wohnt) → où. „qui" wäre nur ein Subjekt, „que" ein direktes Objekt, „dont" bräuchte ein Verb mit de."}]}`
 
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3600, temperature: 0.6 }))
+  // Option kann versehentlich als Objekt kommen ({text:…}/{option:…}) → sauberen String ziehen
+  const optText = o => {
+    if (o == null) return ''
+    if (typeof o === 'object') return String(o.text ?? o.option ?? o.value ?? o.label ?? o.answer ?? '').trim()
+    return String(o).trim()
+  }
   const out = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
     .map(e => {
       if (!e || typeof e !== 'object') return null
       const t = e.type
+      const de = String(e.de || '').trim()
       if (t === 'choice') {
-        const options = Array.isArray(e.options) ? e.options.map(o => String(o)) : []
+        const options = Array.isArray(e.options) ? e.options.map(optText) : []
         const correct = Number(e.correct)
-        if (options.length < 2 || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
-        return { type: 'choice', prompt: String(e.prompt || ''), options, correct, explain: String(e.explain || ''), weight: 1 }
+        if (options.length < 2 || options.some(o => !o) || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
+        return { type: 'choice', prompt: String(e.prompt || ''), de, options, correct, explain: String(e.explain || ''), weight: 1 }
       }
       if (t === 'table') {
         const rows = (Array.isArray(e.rows) ? e.rows : [])
           .map(r => ({ p: String(r.p || '').trim(), answer: String(r.answer || '').trim(), display: String(r.display || r.answer || '').trim() }))
           .filter(r => r.p && r.answer)
         if (rows.length < 2) return null
-        return { type: 'table', verb: String(e.verb || ''), label: String(e.label || ''), rows: rows.slice(0, 6), weight: 3 }
+        return { type: 'table', verb: String(e.verb || ''), label: String(e.label || ''), de, rows: rows.slice(0, 6), explain: String(e.explain || ''), weight: 3 }
       }
       if (t === 'transform') {
         const answer = String(e.answer || '').trim()
         const p = String(e.prompt || '').trim()
         if (!answer || !p) return null
-        return { type: 'transform', prompt: p, answer, answer_display: String(e.answer_display || answer), hint: withHints ? String(e.hint || '') : '', explain: String(e.explain || ''), weight: 3 }
+        return { type: 'transform', prompt: p, de, answer, answer_display: String(e.answer_display || answer), hint: withHints ? String(e.hint || '') : '', explain: String(e.explain || ''), weight: 3 }
       }
       if (t === 'open') {
         const p = String(e.prompt || '').trim()
         if (!p) return null
-        return { type: 'open', prompt: p, sample: String(e.sample || ''), explain: String(e.explain || ''), weight: 3 }
+        return { type: 'open', prompt: p, de, sample: String(e.sample || ''), explain: String(e.explain || ''), weight: 3 }
       }
       // default: cloze (1+ Lücken)
       const p = String(e.prompt || '')
@@ -743,7 +754,7 @@ Antworte NUR mit gültigem JSON ohne Markdown:
         .map(b => ({ answer: String(b.answer || '').trim(), display: String(b.display || b.answer || '').trim(), hint: withHints ? String(b.hint || '') : '' }))
         .filter(b => b.answer)
       if (!p.includes('_') || blanks.length === 0) return null
-      return { type: 'cloze', prompt: p, blanks, explain: String(e.explain || ''), weight: 2 }
+      return { type: 'cloze', prompt: p, de, blanks, explain: String(e.explain || ''), weight: 2 }
     })
     .filter(Boolean)
     .slice(0, count)
@@ -777,6 +788,6 @@ export async function explainGrammarWrong({ path, topic, prompt, correct, userAn
 Aufgabe: "${String(prompt || '')}"
 Richtige Lösung: "${String(correct || '')}"
 Antwort des Lerners: "${String(userAnswer || '(leer)')}"
-Erkläre auf DEUTSCH in 1–3 kurzen Sätzen, warum die Lernerantwort falsch ist und warum die richtige Lösung stimmt (bezieht sich auf die Grammatikregel/Endung).`
+Erkläre auf DEUTSCH in 2–3 kurzen Sätzen: WANN/WO man die richtige Form benutzt (welche Situation, welcher Auslöser oder welches Signalwort sie verlangt), WARUM sie hier stimmt und warum die Form des Lerners hier NICHT passt. Konkret auf diesen Satz bezogen, nicht nur allgemein die Endung nennen.`
   return String(await callGroq(p, { maxTokens: 260, temperature: 0.3 })).trim()
 }

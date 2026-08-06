@@ -85,7 +85,7 @@ function ChoiceEx({ ex, i, words, onResult }) {
   const [picked, setPicked] = useState(null)
   const [checked, setChecked] = useState(false)
   const ok = checked && picked === ex.correct
-  const check = () => { setChecked(true); onResult({ frac: picked === ex.correct ? 1 : 0, weight: 1, type: 'choice', prompt: ex.prompt, correctText: ex.options[ex.correct], userText: ex.options[picked] }) }
+  const check = () => { setChecked(true); onResult({ frac: picked === ex.correct ? 1 : 0, weight: 1, type: 'choice', prompt: ex.prompt, de: ex.de, correctText: ex.options[ex.correct], userText: ex.options[picked] }) }
   return (
     <ExShell i={i} badge="choice" ex={ex} words={words} texts={[ex.prompt, ...ex.options]}>
       <div className="mb-3 flex flex-col gap-2">
@@ -117,7 +117,7 @@ function ClozeEx({ ex, i, words, showHints, onResult }) {
     let c = 0
     for (let k = 0; k < nB; k++) { if (eq(vals[k], ex.blanks[k].answer)) c++ }
     setChecked(true)
-    onResult({ frac: c / nB, weight: ex.weight || 2, type: 'cloze', prompt: ex.prompt, correctText: ex.blanks.slice(0, nB).map(b => b.answer).join(' / '), userText: Array.from({ length: nB }).map((_, k) => vals[k] || '—').join(' / ') })
+    onResult({ frac: c / nB, weight: ex.weight || 2, type: 'cloze', prompt: ex.prompt, de: ex.de, correctText: ex.blanks.slice(0, nB).map(b => b.answer).join(' / '), userText: Array.from({ length: nB }).map((_, k) => vals[k] || '—').join(' / ') })
   }
   return (
     <ExShell i={i} badge="cloze" ex={ex} words={words} texts={[ex.prompt, ...ex.blanks.map(b => b.answer)]}>
@@ -156,7 +156,7 @@ function TableEx({ ex, i, words, onResult }) {
     let c = 0
     ex.rows.forEach(r => { if (eq(vals[r.p], r.answer)) c++ })
     setChecked(true)
-    onResult({ frac: c / ex.rows.length, weight: ex.weight || 3, type: 'table', prompt: `Konjugation: ${ex.label || ex.verb}`, correctText: ex.rows.map(r => `${r.p} ${r.answer}`).join(', '), userText: ex.rows.map(r => `${r.p} ${vals[r.p] || '—'}`).join(', ') })
+    onResult({ frac: c / ex.rows.length, weight: ex.weight || 3, type: 'table', prompt: `Konjugation: ${ex.label || ex.verb}`, de: ex.de, correctText: ex.rows.map(r => `${r.p} ${r.answer}`).join(', '), userText: ex.rows.map(r => `${r.p} ${vals[r.p] || '—'}`).join(', ') })
   }
   return (
     <ExShell i={i} badge="table" ex={ex} words={words} texts={[ex.label, ex.verb]}>
@@ -184,7 +184,7 @@ function TransformEx({ ex, i, words, showHints, onResult }) {
   const [input, setInput] = useState('')
   const [checked, setChecked] = useState(false)
   const ok = checked && eq(input, ex.answer)
-  const check = () => { setChecked(true); onResult({ frac: eq(input, ex.answer) ? 1 : 0, weight: ex.weight || 3, type: 'transform', prompt: ex.prompt, correctText: ex.answer, userText: input }) }
+  const check = () => { setChecked(true); onResult({ frac: eq(input, ex.answer) ? 1 : 0, weight: ex.weight || 3, type: 'transform', prompt: ex.prompt, de: ex.de, correctText: ex.answer, userText: input }) }
   return (
     <ExShell i={i} badge="transform" ex={ex} words={words} texts={[ex.prompt, ex.answer]}>
       {showHints && ex.hint && !checked && <div className="mb-1 font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>💡 {ex.hint}</div>}
@@ -205,7 +205,7 @@ function OpenEx({ ex, i, words, item, onResult }) {
     setState('grading')
     const r = await gradeOpenAnswer({ path: `${item.sectionName} › ${item.groupName}`, topic: item.name, prompt: ex.prompt, sample: ex.sample, userAnswer: input })
     setRes(r); setState('done')
-    onResult({ frac: r.correct ? 1 : 0, weight: ex.weight || 3, type: 'open', prompt: ex.prompt, correctText: ex.sample, userText: input })
+    onResult({ frac: r.correct ? 1 : 0, weight: ex.weight || 3, type: 'open', prompt: ex.prompt, de: ex.de, correctText: ex.sample, userText: input })
   }
   return (
     <ExShell i={i} badge="open" ex={ex} words={words} texts={[ex.prompt, ex.sample]}>
@@ -233,6 +233,7 @@ function ExShell({ i, badge, ex, words, texts, children }) {
         <div className="min-w-0 flex-1">
           <span className="mb-1 inline-block rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold" style={{ backgroundColor: 'var(--blue-tint)', color: 'var(--blue-dark)' }}>{typeBadge(badge)}</span>
           {ex.prompt && badge !== 'table' && badge !== 'cloze' && <div className="text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>{ex.prompt}</div>}
+          {ex.de && <div className="mt-1 text-[13px] italic leading-snug" style={{ color: 'var(--ink-faint)' }}>({ex.de})</div>}
         </div>
       </div>
       {children}
@@ -272,7 +273,7 @@ function Runner({ exercises, words, item, showHints, ctaLabel, onDone }) {
         {exercises.map((ex, idx) => <Exercise key={idx} ex={ex} i={idx} words={words} item={item} showHints={showHints} onResult={r => onResult(idx, r)} />)}
       </div>
       <div className="mt-4 text-center text-xs" style={{ color: 'var(--ink-faint)' }}>{answered} / {exercises.length} beantwortet</div>
-      <button onClick={() => onDone(results.map((r, k) => r || { frac: 0, weight: exercises[k].weight || 1, type: exercises[k].type, prompt: exercises[k].prompt || '', correctText: '', userText: '(nicht beantwortet)' }))}
+      <button onClick={() => onDone(results.map((r, k) => r || { frac: 0, weight: exercises[k].weight || 1, type: exercises[k].type, prompt: exercises[k].prompt || '', de: exercises[k].de, correctText: '', userText: '(nicht beantwortet)' }))}
         disabled={answered < exercises.length}
         className="mt-3 w-full rounded-2xl py-3 text-sm font-semibold text-white"
         style={{ background: answered < exercises.length ? 'var(--ink-faint)' : 'var(--aurora-grad)', cursor: answered < exercises.length ? 'not-allowed' : 'pointer' }}>{ctaLabel}</button>
@@ -293,6 +294,7 @@ function WrongItem({ item, r }) {
   return (
     <div className="rounded-xl border p-3" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
       <div className="text-sm" style={{ color: 'var(--ink)' }}>{r.prompt}</div>
+      {r.de && <div className="text-xs italic" style={{ color: 'var(--ink-faint)' }}>({r.de})</div>}
       <div className="mt-1 text-xs" style={{ color: '#c0453f' }}>Deine Antwort: {r.userText || '—'}</div>
       <div className="text-xs" style={{ color: '#12a45a' }}>Richtig: {r.correctText || '—'}</div>
       {exp
