@@ -318,12 +318,18 @@ const ErrCard = ({ msg, onRetry }) => (
 
 async function genMany(item, words, target, withHints) {
   const { targetWords, contextWords } = splitWords(words, targetPosForItem(item))
+  // Themen-spezifischer Übungs-Leitfaden aus der DB (einmal pro Thema)
+  let guide = ''
+  try {
+    const { data: gRow } = await supabase.from('grammar_explanations').select('exercise_guide').eq('topic_key', item.key).maybeSingle()
+    guide = gRow?.exercise_guide || ''
+  } catch { /* ohne Leitfaden weiter */ }
   const acc = []
   let guard = 0
   while (acc.length < target && guard++ < 3) {
     const batch = await generateGrammarSet({
       path: `${item.sectionName} › ${item.groupName}`, topic: item.name, style: item.style,
-      sectionId: item.sectionId, targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
+      sectionId: item.sectionId, guide, targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
     })
     acc.push(...batch)
   }

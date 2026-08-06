@@ -665,7 +665,7 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
 // ob deutsche Hinweise mitgeliefert werden (Lernrunde ja, Testrunde nein).
 // Typen: choice (antippen, w1) · cloze mit 1+ Lücken (w2) · table (w3) ·
 //        transform (w3) · open (frei, KI-bewertet, w3)
-export async function generateGrammarSet({ path, topic, style = 'mixed', sectionId = '', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
+export async function generateGrammarSet({ path, topic, style = 'mixed', sectionId = '', guide = '', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
   const fmt = ws => (ws || []).slice(0, 10).map(w => `"${w.french}" (${w.german})`).join(', ')
   const tW = fmt(targetWords)
   const cW = fmt(contextWords)
@@ -707,6 +707,7 @@ THEMA (nur darum geht es): ${path} — „${topic}".
 - Jede Übung muss eine EINDEUTIGE Lösung haben, die sich aus der Regel ergibt. Keine Lücke, deren Antwort man nicht wissen kann.
 - Sätze kurz, klar, natürlich. Lieber einfache Sätze mit sauberer Regel als komplizierte, schiefe Sätze.
 
+${guide ? `📋 ÜBUNGS-LEITFADEN für genau dieses Thema (VERBINDLICH — halte dich exakt daran):\n${guide}\n` : ''}
 ${wordsBlock}
 
 Erzeuge ${count} Übungen, abwechslungsreich gemischt (verschiedene Typen), alle zum Thema „${topic}".
