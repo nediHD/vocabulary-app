@@ -318,18 +318,19 @@ const ErrCard = ({ msg, onRetry }) => (
 
 async function genMany(item, words, target, withHints) {
   const { targetWords, contextWords } = splitWords(words, targetPosForItem(item))
-  // Themen-spezifischer Übungs-Leitfaden aus der DB (einmal pro Thema)
-  let guide = ''
+  // Themen-spezifische Theorie (Regeln & Ausnahmen) + Übungs-Leitfaden aus der DB (einmal pro Thema)
+  let guide = '', theory = ''
   try {
-    const { data: gRow } = await supabase.from('grammar_explanations').select('exercise_guide').eq('topic_key', item.key).maybeSingle()
+    const { data: gRow } = await supabase.from('grammar_explanations').select('exercise_guide, explanation').eq('topic_key', item.key).maybeSingle()
     guide = gRow?.exercise_guide || ''
-  } catch { /* ohne Leitfaden weiter */ }
+    theory = gRow?.explanation || ''
+  } catch { /* ohne Leitfaden/Theorie weiter */ }
   const acc = []
   let guard = 0
   while (acc.length < target && guard++ < 3) {
     const batch = await generateGrammarSet({
       path: `${item.sectionName} › ${item.groupName}`, topic: item.name, style: item.style,
-      sectionId: item.sectionId, guide, targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
+      sectionId: item.sectionId, guide, theory, targetWords, contextWords, words, count: Math.min(10, target - acc.length), withHints,
     })
     acc.push(...batch)
   }
@@ -466,9 +467,9 @@ export default function GrammarPractice({ setView }) {
   useEffect(() => { load() }, [])
 
   const pickWords = () => {
-    if (words.length <= 12) return words
-    const start = Math.floor((Date.now() / 1000) % Math.max(1, words.length - 12))
-    return words.slice(start, start + 12)
+    if (words.length <= 20) return words
+    const start = Math.floor((Date.now() / 1000) % Math.max(1, words.length - 20))
+    return words.slice(start, start + 20)
   }
 
   const finishTopic = async (passed, score) => {

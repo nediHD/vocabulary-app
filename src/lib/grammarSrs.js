@@ -105,8 +105,8 @@ export function targetPosForItem(item) {
 // Teilt die Wörter des Lerners in Zielwörter (passende Wortart) und Kontextwörter (Rest).
 export function splitWords(words, targetPos) {
   const ws = words || []
-  if (!targetPos) return { targetWords: [], contextWords: ws.slice(0, 10) }
+  if (!targetPos) return { targetWords: [], contextWords: ws.slice(0, 16) }
   const target = ws.filter(w => w.wortart === targetPos)
   const context = ws.filter(w => w.wortart !== targetPos)
-  return { targetWords: target.slice(0, 10), contextWords: context.slice(0, 10) }
+  return { targetWords: target.slice(0, 16), contextWords: context.slice(0, 16) }
 }

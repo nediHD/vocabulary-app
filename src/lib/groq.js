@@ -710,24 +710,26 @@ WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine E
 // ob deutsche Hinweise mitgeliefert werden (Lernrunde ja, Testrunde nein).
 // Typen: choice (antippen, w1) · cloze mit 1+ Lücken (w2) · table (w3) ·
 //        transform (w3) · open (frei, KI-bewertet, w3)
-export async function generateGrammarSet({ path, topic, style = 'mixed', sectionId = '', guide = '', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
-  const fmt = ws => (ws || []).slice(0, 10).map(w => `"${w.french}" (${w.german})`).join(', ')
+export async function generateGrammarSet({ path, topic, style = 'mixed', sectionId = '', guide = '', theory = '', targetWords = [], contextWords = [], words = [], count = 10, withHints = true }) {
+  const fmt = ws => (ws || []).slice(0, 16).map(w => `"${w.french}" (${w.german})`).join(', ')
   const tW = fmt(targetWords)
   const cW = fmt(contextWords)
   const legacy = fmt(words)
   // Konjugationstabelle (6 Personen) NUR bei Verbzeiten/-modi sinnvoll.
   const allowTable = sectionId === 'verben'
+  const varietyRule = 'WORT-VIELFALT: Nimm in JEDER Übung möglichst ein ANDERES Wort. Wiederhole ein Wort erst, wenn alle passenden Wörter einmal an der Reihe waren – nicht 5× dasselbe Wort.'
   let wordsBlock
   if (tW || cW) {
     wordsBlock = [
       tW ? `ZIELWÖRTER des Lerners (bevorzugt einbauen, passend zur Regel beugen/testen): ${tW}.` : '',
       cW ? `KONTEXTWÖRTER (nur als Umgebung/Nomen im Satz, NIE als das getestete Element, und NUR wenn sie NATÜRLICH passen): ${cW}.` : '',
-      'Wenn ein Wort des Lerners nicht natürlich in eine Übung zu DIESEM Thema passt, LASS ES WEG und nimm ein einfaches, gängiges französisches Wort. Erzwinge nie ein unpassendes Wort.',
+      varietyRule,
+      'Wenn ein Wort des Lerners nicht natürlich in eine Übung zu DIESEM Thema passt (oder eine bestimmte Regel/Ausnahme ein spezielles Wort verlangt, z. B. beau→bel vor Vokal), LASS ES WEG und nimm das passende gängige Wort. Erzwinge nie ein unpassendes Wort – Regel-Abdeckung geht vor.',
     ].filter(Boolean).join('\n')
   } else if (legacy) {
-    wordsBlock = `Nutze BEVORZUGT diese Wörter des Lerners, aber nur wo sie natürlich passen: ${legacy}. Sonst gängige Wörter erfinden.`
+    wordsBlock = `Nutze BEVORZUGT diese Wörter des Lerners, aber nur wo sie natürlich passen: ${legacy}. Sonst gängige Wörter erfinden.\n${varietyRule}`
   } else {
-    wordsBlock = `Erfinde passende, gängige, EINFACHE französische Wörter für den Satzrahmen.`
+    wordsBlock = `Erfinde passende, gängige, EINFACHE französische Wörter für den Satzrahmen.\n${varietyRule}`
   }
   const hintRule = withHints
     ? 'Gib bei Schreib-Übungen ein Feld "hint": ein KONKRETER, KORREKTER deutscher Hinweis zur jeweiligen Lücke (z. B. „Adjektiv an die richtige Stelle" oder „aller, Passé composé, il"). Keine allgemeinen/pauschalen Hinweise.'
@@ -752,10 +754,13 @@ THEMA (nur darum geht es): ${path} — „${topic}".
 - Jede Übung muss eine EINDEUTIGE Lösung haben, die sich aus der Regel ergibt. Keine Lücke, deren Antwort man nicht wissen kann.
 - Sätze kurz, klar, natürlich. Lieber einfache Sätze mit sauberer Regel als komplizierte, schiefe Sätze.
 
+${theory ? `📖 REGELN & AUSNAHMEN DIESES THEMAS (die Theorie – alle Fälle sollen geprüft werden):\n${theory}\n` : ''}
 ${guide ? `📋 ÜBUNGS-LEITFADEN für genau dieses Thema (VERBINDLICH — halte dich exakt daran):\n${guide}\n` : ''}
 ${wordsBlock}
 
 Erzeuge ${count} Übungen, abwechslungsreich gemischt (verschiedene Typen), alle zum Thema „${topic}".
+
+✅ VOLLSTÄNDIGE ABDECKUNG (wichtig): Verteile die ${count} Übungen so, dass JEDE Regel UND JEDE Ausnahme aus der Theorie/dem Leitfaden oben mindestens einmal geprüft wird, BEVOR sich ein Fall wiederholt. Nicht nur den einfachsten Standardfall abfragen – bewusst auch die Ausnahmen und Sonderfälle einbauen (Reihenfolge der Fälle darf gemischt sein).
 
 Typen:
 ${typeLines}
