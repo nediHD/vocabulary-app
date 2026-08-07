@@ -385,7 +385,13 @@ function parseGroqJSON(content) {
     // llama liefert oft leicht kaputtes JSON (unescapte "-Zeichen, Zeilenumbrüche
     // in Strings, überflüssige Kommas, abgeschnittene Klammern) → automatisch reparieren.
     try { return JSON.parse(jsonrepair(cleaned)) }
-    catch { throw new Error('Groq: Ungültige JSON-Antwort') }
+    catch (e) {
+      // Diagnose: die Roh-Antwort in die Konsole schreiben, damit man sieht, WAS kam.
+      const raw = String(content || '')
+      try { console.error('[Groq] Roh-Antwort (nicht parsebar):\n', raw) } catch { /* egal */ }
+      const snippet = raw.trim().slice(0, 300).replace(/\s+/g, ' ')
+      throw new Error(`Groq: Ungültige JSON-Antwort — Anfang der Antwort: „${snippet}…"`)
+    }
   }
 }
 
