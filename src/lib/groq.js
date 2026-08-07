@@ -1,5 +1,17 @@
 import { jsonrepair } from 'jsonrepair'
 
+// llama setzt gern deutsche/typografische Anführungszeichen um Wörter MITTEN in
+// JSON-String-Werte („efflanqué", „petit" …). Kommt das schließende Zeichen als
+// gerades ASCII-" heraus, beendet es den JSON-String zu früh → kaputtes JSON.
+// Ein öffnendes „ (U+201E) steht aber NIE als JSON-Trenner, sondern immer im
+// String-Inhalt. Deshalb ist es sicher, „…" (schließend curly ” oder gerade ")
+// in einfache 'Anführungszeichen' umzuwandeln – vor dem Parsen.
+function sanitizeInnerQuotes(str) {
+  return String(str)
+    .replace(/„([^„"”]*)[”"]/g, "'$1'") // „…" bzw. „…”
+    .replace(/[“”„]/g, "'")                  // übrige typografische Doppelquotes
+}
+
 function cleanJSON(str) {
   // Uklanja markdown fence: ```json ... ``` ili ``` ... ```
   let cleaned = String(str || '').trim()
@@ -19,7 +31,7 @@ function cleanJSON(str) {
     const end = cleaned.lastIndexOf(close)
     if (end > start) cleaned = cleaned.slice(start, end + 1)
   }
-  return cleaned.trim()
+  return sanitizeInnerQuotes(cleaned).trim()
 }
 
 // Kürzt Text sinnvoll: endet am letzten vollständigen Satz (.!?) innerhalb des Limits,
@@ -757,8 +769,9 @@ PFLICHTFELDER für JEDE Übung:
 ${hintRule}
 Markiere in display/answer_display nur den relevanten Teil mit ~Tilden~.
 
-Antworte NUR mit gültigem JSON ohne Markdown. Beispiel für das THEMA Adjektiv-Stellung (passe Inhalt an DEIN Thema an!):
-{"exercises":[{"type":"choice","prompt":"Welche Stellung ist richtig?","de":"ein rotes Auto","options":["une rouge voiture","une voiture rouge"],"correct":1,"explain":"Farben stehen IMMER nach dem Nomen → une voiture rouge. Vor dem Nomen (une rouge voiture) ist falsch — das gibt es nur bei kurzen BANGS-Adjektiven."},{"type":"cloze","prompt":"Stell das Adjektiv „petit" an die richtige Stelle: J'ai un _____ chien.","de":"Ich habe einen kleinen Hund.","blanks":[{"answer":"petit","display":"~petit~","hint":"BANGS-Adjektiv (Größe) → vor dem Nomen"}],"explain":"„petit" gehört zu den kurzen BANGS-Adjektiven (Size) und steht deshalb VOR dem Nomen: un petit chien. Nach dem Nomen (un chien petit) wäre falsch."}]}`
+Antworte NUR mit gültigem JSON ohne Markdown. WICHTIG für gültiges JSON: Wenn du innerhalb eines Textes ein Wort hervorheben willst, benutze EINFACHE Anführungszeichen 'so' — NIEMALS doppelte Anführungszeichen (weder " noch „ ") innerhalb eines JSON-Strings.
+Beispiel für das THEMA Adjektiv-Stellung (passe Inhalt an DEIN Thema an!):
+{"exercises":[{"type":"choice","prompt":"Welche Stellung ist richtig?","de":"ein rotes Auto","options":["une rouge voiture","une voiture rouge"],"correct":1,"explain":"Farben stehen IMMER nach dem Nomen → une voiture rouge. Vor dem Nomen (une rouge voiture) ist falsch — das gibt es nur bei kurzen BANGS-Adjektiven."},{"type":"cloze","prompt":"Stell das Adjektiv 'petit' an die richtige Stelle: J'ai un _____ chien.","de":"Ich habe einen kleinen Hund.","blanks":[{"answer":"petit","display":"~petit~","hint":"BANGS-Adjektiv (Größe) → vor dem Nomen"}],"explain":"'petit' gehört zu den kurzen BANGS-Adjektiven (Size) und steht deshalb VOR dem Nomen: un petit chien. Nach dem Nomen (un chien petit) wäre falsch."}]}`
 
   let parsed
   try {
