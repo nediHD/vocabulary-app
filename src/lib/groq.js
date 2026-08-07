@@ -348,7 +348,7 @@ export async function generateSentence(word1, word2) {
 }
 
 // ---- Gemeinsamer Groq-Aufruf (für Hörübung) ----
-async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5, json = false } = {}) {
+async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
@@ -363,9 +363,6 @@ async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5, json = fa
       messages: [{ role: 'user', content: prompt }],
       temperature,
       max_tokens: maxTokens,
-      // Erzwingt gültiges JSON (kein Fließtext drumherum). Voraussetzung: das Wort
-      // "json" steht im Prompt – das ist bei allen JSON-Aufrufen der Fall.
-      ...(json ? { response_format: { type: 'json_object' } } : {}),
     }),
   })
   if (!res.ok) {
@@ -413,7 +410,7 @@ Antworte NUR mit JSON ohne Markdown: {"boundaries":[Sekunde, Sekunde, ...]} (Sta
 Transkript:
 ${win.join('\n')}`
     try {
-      const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 300, temperature: 0.2, json: true }))
+      const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 300, temperature: 0.2 }))
       for (const b of (parsed.boundaries || [])) {
         const s = Math.round(Number(b))
         if (Number.isFinite(s) && s > 30 && s < total - 30) candidates.add(s)
@@ -521,7 +518,7 @@ Aufgabe – schreibe den Text auf FRANZÖSISCH:
 
 Flüssiger, gesprochener Stil, KEINE Aufzählungszeichen/Nummerierung. Mindestens 1200 Zeichen, höchstens 4000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6, json: true }))
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
     podcast_text: capText(String(parsed.podcast_text || ''), 4500), // ~5 Min Audio; harte TTS-Grenze in inworld.js
     summary: String(parsed.summary || '').slice(0, 500),
@@ -551,7 +548,7 @@ Regeln:
 
 Antworte NUR mit JSON ohne Markdown:
 {"questions":[{"statement":"...","options":["A","B","C","D"],"correct":[0],"justification":"...","source":"wörtliches Zitat aus dem Transkript"}]}`
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2400, temperature: 0.4, json: true }))
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2400, temperature: 0.4 }))
   const out = (parsed.questions || [])
     .filter(q => q && Array.isArray(q.options) && q.options.length === 4 && Array.isArray(q.correct))
     .map(q => ({
@@ -648,7 +645,7 @@ Regeln: genau EINE eindeutige Lösung pro Übung (keine mehrdeutigen Antworten).
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
 {"exercises":[{"type":"table","verb":"parler","label":"Présent von parler","rows":[{"p":"je","answer":"parle","display":"parl~e~"},{"p":"tu","answer":"parles","display":"parl~es~"},{"p":"il/elle","answer":"parle","display":"parl~e~"},{"p":"nous","answer":"parlons","display":"parl~ons~"},{"p":"vous","answer":"parlez","display":"parl~ez~"},{"p":"ils/elles","answer":"parlent","display":"parl~ent~"}]},{"type":"cloze","prompt":"Demain, je _____ à Paris.","answer":"irai","answer_display":"ir~ai~","hint":"aller, 1. P. Sg. Futur simple","explain":"„demain“ + einmalige Zukunft → Futur simple."},{"type":"transform","prompt":"Setze ins Imparfait: Nous mangeons ensemble.","answer":"Nous mangions ensemble.","answer_display":"Nous mang~ions~ ensemble.","explain":"Imparfait-Endung -ions bei nous."}]}`
 
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.5, json: true }))
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.5 }))
   const exercises = (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
     .map(e => {
       if (!e || typeof e !== 'object') return null
@@ -751,10 +748,10 @@ Antworte NUR mit gültigem JSON ohne Markdown. Beispiel für das THEMA Adjektiv-
 
   let parsed
   try {
-    parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 6000, temperature: 0.6, json: true }))
+    parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 6000, temperature: 0.6 }))
   } catch {
     // llama liefert gelegentlich unvollständiges/kaputtes JSON – ein Wiederholungsversuch
-    parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 6000, temperature: 0.4, json: true }))
+    parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 6000, temperature: 0.4 }))
   }
   // Option kann versehentlich als Objekt kommen ({text:…}/{option:…}) → sauberen String ziehen
   const optText = o => {
@@ -821,7 +818,7 @@ Antwort des Lerners: "${ua}"
 Bewerte, ob die Antwort die Aufgabe grammatisch korrekt und passend zum Thema erfüllt (kleine Tippfehler bei Akzenten NICHT hart bewerten). Antworte NUR mit JSON:
 {"correct": true/false, "feedback": "1-2 kurze deutsche Sätze: was gut/falsch war, ggf. Korrektur"}`
   try {
-    const parsed = parseGroqJSON(await callGroq(p, { maxTokens: 250, temperature: 0.2, json: true }))
+    const parsed = parseGroqJSON(await callGroq(p, { maxTokens: 250, temperature: 0.2 }))
     return { correct: !!parsed.correct, feedback: String(parsed.feedback || '').trim() }
   } catch {
     return { correct: false, feedback: 'Bewertung nicht möglich.' }
