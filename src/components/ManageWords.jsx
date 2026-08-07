@@ -5,8 +5,7 @@ const WORTARTEN = ['Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Konju
 
 export default function ManageWords({ setView }) {
   const [words, setWords] = useState([])
-  const [german, setGerman] = useState('')
-  const [french, setFrench] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,39 +38,6 @@ export default function ManageWords({ setView }) {
     }
   }
 
-  const handleAddWord = async (e) => {
-    e.preventDefault()
-
-    if (!german.trim() || !french.trim()) {
-      alert('Bitte füllen Sie beide Felder aus.')
-      return
-    }
-
-    try {
-      const { error } = await supabase.from('cards').insert([
-        {
-          german: german.trim(),
-          french: french.trim(),
-          status: 'learning',
-          learning_correct_count: 0,
-        },
-      ])
-
-      if (error) {
-        console.error('Error adding word:', error)
-        alert('Fehler beim Hinzufügen des Wortes.')
-        return
-      }
-
-      setGerman('')
-      setFrench('')
-      await fetchWords()
-    } catch (err) {
-      console.error('Error:', err)
-      alert('Fehler beim Hinzufügen des Wortes.')
-    }
-  }
-
   const handleDeleteWord = async (id) => {
     if (!confirm('Dieses Wort löschen?')) return
 
@@ -101,6 +67,11 @@ export default function ManageWords({ setView }) {
       : { backgroundColor: '#f0f2f5', color: 'var(--ink-soft)' }
   }
 
+  const q = search.trim().toLowerCase()
+  const shown = q
+    ? words.filter(w => (w.german || '').toLowerCase().includes(q) || (w.french || '').toLowerCase().includes(q))
+    : words
+
   return (
     <div className="mx-auto max-w-4xl">
       <button
@@ -112,62 +83,43 @@ export default function ManageWords({ setView }) {
       </button>
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-1" style={{ color: 'var(--ink)' }}>Meine Wörter</h2>
-        <p style={{ color: 'var(--ink-soft)' }}>{words.length} Wörter insgesamt</p>
+        <p style={{ color: 'var(--ink-soft)' }}>{q ? `${shown.length} von ${words.length} Wörtern` : `${words.length} Wörter insgesamt`}</p>
       </div>
 
-      {/* Add Word Form */}
-      <form
-        onSubmit={handleAddWord}
-        className="mb-8 rounded-3xl border p-4"
-        style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}
-      >
-        <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
-          <input
-            type="text"
-            placeholder="Deutsches Wort"
-            value={german}
-            onChange={e => setGerman(e.target.value)}
-            className="flex-1 rounded-2xl border px-4 py-3 font-sans text-sm outline-none"
-            style={{
-              borderColor: 'var(--line)',
-              backgroundColor: 'var(--surface-2)',
-              color: 'var(--ink)',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--blue)'}
-            onBlur={e => e.target.style.borderColor = 'var(--line)'}
-          />
-          <input
-            type="text"
-            placeholder="Französisches Wort"
-            value={french}
-            onChange={e => setFrench(e.target.value)}
-            className="flex-1 rounded-2xl border px-4 py-3 font-sans text-sm outline-none"
-            style={{
-              borderColor: 'var(--line)',
-              backgroundColor: 'var(--surface-2)',
-              color: 'var(--ink)',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--blue)'}
-            onBlur={e => e.target.style.borderColor = 'var(--line)'}
-          />
+      {/* Suche */}
+      <div className="mb-8 relative">
+        <input
+          type="text"
+          placeholder="Wörter suchen (Deutsch oder Französisch)…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full rounded-2xl border px-4 py-3 pr-10 font-sans text-sm outline-none"
+          style={{ borderColor: 'var(--line)', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}
+          onFocus={e => e.target.style.borderColor = 'var(--blue)'}
+          onBlur={e => e.target.style.borderColor = 'var(--line)'}
+        />
+        {search && (
           <button
-            type="submit"
-            className="rounded-2xl px-4 py-3 font-semibold text-white transition-colors sm:w-auto"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-lg"
+            style={{ color: 'var(--ink-faint)' }}
+            title="Suche leeren"
           >
-            Hinzufügen
+            ×
           </button>
-        </div>
-      </form>
+        )}
+      </div>
 
       {/* Words List */}
       {loading ? (
         <div style={{ color: 'var(--ink-soft)' }} className="text-center">Lädt...</div>
       ) : words.length === 0 ? (
         <div className="rounded-3xl border p-8 text-center" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink-soft)' }}>
-          Keine Wörter vorhanden. Füge dein erstes Wort hinzu!
+          Keine Wörter vorhanden.
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="rounded-3xl border p-8 text-center" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink-soft)' }}>
+          Keine Treffer für „{search.trim()}".
         </div>
       ) : (
         <div className="rounded-3xl border overflow-hidden" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
@@ -182,7 +134,7 @@ export default function ManageWords({ setView }) {
 
           {/* Word Rows */}
           <div>
-            {words.map(word => (
+            {shown.map(word => (
               <div
                 key={word.id}
                 className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_130px_60px] gap-3 sm:gap-4 border-b px-4 py-4 sm:px-6 sm:py-4 last:border-b-0"
