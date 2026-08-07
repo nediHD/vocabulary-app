@@ -488,20 +488,21 @@ ${win.join('\n')}`
 // Erzeugt den Podcast-Text (B2, baut auf priorSummary auf) + eine kurze summary für den nächsten Abschnitt.
 export async function generatePodcastText(segmentSlice, priorSummary, segIdx) {
   const context = priorSummary
-    ? `Bisher in den vorigen Abschnitten: ${priorSummary}\n\n`
+    ? `Zur Einordnung (NUR für dich – NICHT vorlesen, NICHT zusammenfassen, NICHT erwähnen). Vorher ging es um: ${priorSummary}\n\n`
     : ''
-  const prompt = `Du bist ein Französischlehrer und machst einen fortlaufenden Podcast. Du sprichst direkt mit einem Lerner (Niveau B2) und redest ihn per "tu" an.
+  const prompt = `Du bist ein Französischlehrer und erklärst einem Lerner (Niveau B2) einen Video-Abschnitt. Du sprichst ihn direkt per "tu" an, wie im Gespräch.
 
-${context}Dies ist Abschnitt ${segIdx + 1}. Transkript dieses Abschnitts (Französisch):
+${context}Transkript dieses Abschnitts (Französisch, kann Erkennungsfehler enthalten):
 """${segmentSlice}"""
 
-Aufgabe – schreibe den Podcast-Text auf FRANZÖSISCH:
-1. FORTLAUFEND: Das ganze Video ist EIN durchgehender Podcast in mehreren Teilen. Dieser Teil setzt den vorigen nahtlos fort (kurze Anknüpfung, KEINE neue Begrüßung/Folge). Erster Teil = passender Einstieg.
-2. Erzähle in einfachem Französisch NACH, was in diesem Abschnitt passiert (der Inhalt/die Handlung), sodass der Lerner es leicht versteht.
-3. Erkläre dabei die WICHTIGEN Wörter und Ausdrücke aus dem Abschnitt (was sie bedeuten) – eingebettet in den Text, nicht als Liste.
-Sprich den Lerner die GANZE Zeit direkt an (per "tu"), wie ein Lehrer im Gespräch – KEIN distanzierter Erzählton. Einfaches, verständliches Französisch (B2), natürlicher gesprochener Podcast-Stil, fließend, KEINE Aufzählungszeichen oder Nummerierung.
+Aufgabe – schreibe den Erklärtext auf FRANZÖSISCH:
+1. Steig DIREKT in den Inhalt ein. Erkläre in einfachem Französisch, was in diesem Abschnitt passiert, und erkläre dabei die WICHTIGEN Wörter/Ausdrücke eingebettet im Text (was sie bedeuten).
+2. VERBOTEN am Anfang: keine Begrüßung, KEINE Wiederholung/Zusammenfassung des vorigen Teils, kein "tu te souviens…", kein "on avait vu…", keine Ankündigung einer neuen Folge.
+3. VERBOTEN am Ende: KEINE Fragen an den Lerner ("qu'en penses-tu ?", "tu es prêt ?"), KEINE Floskeln ("reste à l'écoute", "on continue dans le prochain épisode", "sois attentif"). Hör einfach auf, sobald der Inhalt erklärt ist.
+4. Das Transkript enthält oft Erkennungsfehler (falsch geschriebene Namen/Wörter). Korrigiere erkennbare Fehler STILL und plappere die falschen Formen NICHT nach.
+5. Kein Füllwerk, keine Wiederholungen desselben Satzes. Dichter, konkreter Text.
 
-WICHTIG: mindestens 2500 Zeichen, höchstens 4500 Zeichen (entspricht max. ~5 Min Audio). Antworte NUR mit JSON ohne Markdown:
+Flüssiger, gesprochener Stil, KEINE Aufzählungszeichen/Nummerierung. Mindestens 1500 Zeichen, höchstens 4000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
@@ -512,23 +513,24 @@ WICHTIG: mindestens 2500 Zeichen, höchstens 4500 Zeichen (entspricht max. ~5 Mi
 
 // 3-4 Multiple-Choice-Fragen (4 Optionen, 1-2 richtig, mit Begründung), an den Podcast gekoppelt.
 export async function generateMCQuestions(podcastText, segmentSlice) {
-  const prompt = `Basierend auf diesem Podcast (Erklärung eines französischen Video-Abschnitts) und dem Transkript, erstelle 3-4 Multiple-Choice-Fragen auf FRANZÖSISCH.
+  const prompt = `Erstelle 3-4 Multiple-Choice-Verständnisfragen auf FRANZÖSISCH zu diesem Video-Abschnitt.
 
-Podcast:
-"""${String(podcastText || '').slice(0, 6000)}"""
+Transkript des Abschnitts (Original-Audio – DAS ist maßgeblich):
+"""${String(segmentSlice || '').slice(0, 3500)}"""
 
-Transkript-Abschnitt:
-"""${String(segmentSlice || '').slice(0, 3000)}"""
+Podcast (Erklärung dazu, nur Hilfskontext):
+"""${String(podcastText || '').slice(0, 4000)}"""
 
 Regeln:
-- Jede Frage hat genau 4 Antwortoptionen.
-- 1 ODER 2 Optionen sind richtig (variiere – mal 1, mal 2). Verrate NICHT, wie viele richtig sind.
-- Die Fragen beziehen sich auf Inhalte, die im Podcast erklärt wurden – aber NICHT zu offensichtlich (plausible falsche Optionen).
-- Zu jeder Frage ein Satz "justification" auf Französisch: warum die richtige(n) Antwort(en) richtig ist/sind.
+- Jede Frage hat genau 4 Antwortoptionen. 1 ODER 2 sind richtig (variiere – mal 1, mal 2). Verrate NICHT, wie viele richtig sind.
+- STRENG VERANKERT: Jede richtige Antwort muss sich WÖRTLICH aus dem TRANSKRIPT belegen lassen. Rate NICHTS, erfinde keine Fakten, kein "probablement", keine "pratique courante"-Vermutungen. Steht etwas nicht klar im Transkript, frag es NICHT.
+- Die falschen Optionen sind eindeutig falsch (nicht im Transkript belegbar), aber trotzdem plausibel.
+- "justification": 1 Satz auf Französisch, warum die richtige(n) Antwort(en) stimmt/stimmen.
+- "source": kopiere hier WÖRTLICH den kurzen Satz bzw. Ausschnitt AUS DEM TRANSKRIPT (nicht aus dem Podcast, NICHT korrigiert, exakt dieselben Wörter), an dem die Antwort gesagt wird. Damit kann der Lerner genau diese Stelle im Original-Audio anhören. Halte "source" kurz (ein Satz).
 
 Antworte NUR mit JSON ohne Markdown:
-{"questions":[{"statement":"...","options":["A","B","C","D"],"correct":[0],"justification":"..."}]}`
-  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2000, temperature: 0.5 }))
+{"questions":[{"statement":"...","options":["A","B","C","D"],"correct":[0],"justification":"...","source":"wörtliches Zitat aus dem Transkript"}]}`
+  const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2400, temperature: 0.4 }))
   const out = (parsed.questions || [])
     .filter(q => q && Array.isArray(q.options) && q.options.length === 4 && Array.isArray(q.correct))
     .map(q => ({
@@ -536,6 +538,7 @@ Antworte NUR mit JSON ohne Markdown:
       options: q.options.map(o => String(o)),
       correct: [...new Set(q.correct.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n < 4))],
       justification: String(q.justification || ''),
+      source: String(q.source || '').slice(0, 400),
     }))
     .filter(q => q.statement && q.correct.length >= 1 && q.correct.length <= 2)
     .slice(0, 4)

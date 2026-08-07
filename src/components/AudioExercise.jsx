@@ -25,6 +25,42 @@ function fmtTime(s) {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
+// Text für Zitat-Matching normalisieren (Kleinbuchstaben, Akzente/Interpunktion weg)
+function normForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+// Findet ein wörtliches Transkript-Zitat im Transkript-Array und liefert {start, end} in Sekunden.
+// transcript: [{ start, dur, text }]. Gibt null zurück, wenn nicht gefunden.
+function locateQuote(transcript, quote) {
+  if (!Array.isArray(transcript) || !transcript.length) return null
+  const nq = normForMatch(quote)
+  if (nq.length < 8) return null
+  let full = ''
+  const map = [] // Zeichen-Index -> Zeilen-Index
+  transcript.forEach((line, li) => {
+    const t = normForMatch(line.text)
+    if (!t) return
+    if (full) { full += ' '; map.push(li) }
+    for (let k = 0; k < t.length; k++) { full += t[k]; map.push(li) }
+  })
+  let pos = full.indexOf(nq)
+  if (pos < 0) {
+    const prefix = nq.split(' ').slice(0, 8).join(' ')
+    if (prefix.length >= 8) pos = full.indexOf(prefix)
+  }
+  if (pos < 0) return null
+  const startLine = transcript[map[pos]]
+  const endLine = transcript[map[Math.min(full.length - 1, pos + nq.length - 1)]]
+  const start = Math.max(0, Number(startLine.start) || 0)
+  const end = (Number(endLine.start) || start) + (Number(endLine.dur) || 3)
+  return { start, end: Math.max(end, start + 2) }
+}
+
 function extractVideoId(input) {
   if (!input) return null
   const ps = [
@@ -162,6 +198,7 @@ export default function AudioExercise({ setView, setInSession }) {
   const [videoId, setVideoId] = useState('')
   const [segments, setSegments] = useState([])
   const [adRanges, setAdRanges] = useState([])
+  const [transcript, setTranscript] = useState([])
   const [segIdx, setSegIdx] = useState(0)
   const [phase, setPhase] = useState('listen1') // listen1 | podcast | listen2 | mc
   const [playerReady, setPlayerReady] = useState(false)
@@ -219,6 +256,7 @@ export default function AudioExercise({ setView, setInSession }) {
   const exIdRef = useRef(null)
   const audioRef = useRef(null)
   const videoRateRef = useRef(1)
+  const quoteIntervalRef = useRef(null)
 
   useEffect(() => { videoRateRef.current = videoRate }, [videoRate])
 
@@ -247,6 +285,7 @@ export default function AudioExercise({ setView, setInSession }) {
     return () => {
       setInSession(false)
       clearInterval(intervalRef.current)
+      clearInterval(quoteIntervalRef.current)
       try { playerRef.current?.destroy?.() } catch { /* noop */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -282,6 +321,7 @@ export default function AudioExercise({ setView, setInSession }) {
     return () => {
       cancelled = true
       clearInterval(intervalRef.current)
+      clearInterval(quoteIntervalRef.current)
       try { playerRef.current?.destroy?.() } catch { /* noop */ }
       playerRef.current = null
     }
@@ -378,8 +418,31 @@ export default function AudioExercise({ setView, setInSession }) {
 
   const stopSegment = () => {
     clearInterval(intervalRef.current)
+    clearInterval(quoteIntervalRef.current)
     try { playerRef.current?.pauseVideo?.() } catch { /* noop */ }
     setPlaying(false)
+  }
+
+  // Genau die Stelle im Original-Audio abspielen, an der die Antwort gesagt wird.
+  const playQuote = (source) => {
+    const p = playerRef.current
+    if (!p) return
+    const loc = locateQuote(transcript, source)
+    if (!loc) return
+    clearInterval(intervalRef.current)
+    clearInterval(quoteIntervalRef.current)
+    setPlaying(false)
+    try {
+      p.seekTo(loc.start, true)
+      p.setPlaybackRate(videoRateRef.current)
+      p.playVideo()
+    } catch { /* noop */ }
+    quoteIntervalRef.current = setInterval(() => {
+      try {
+        const t = playerRef.current?.getCurrentTime?.() ?? 0
+        if (t >= loc.end) { playerRef.current?.pauseVideo?.(); clearInterval(quoteIntervalRef.current) }
+      } catch { /* noop */ }
+    }, 200)
   }
 
   const doSeek = (targetSec) => {
@@ -410,6 +473,7 @@ export default function AudioExercise({ setView, setInSession }) {
     setExerciseId(id); exIdRef.current = id
     setVideoId(ex.video_id); setSegments(segs)
     setAdRanges(Array.isArray(ex.ad_ranges) ? ex.ad_ranges : [])
+    setTranscript(Array.isArray(ex.transcript) ? ex.transcript : [])
     setSegIdx(ex.last_seg_idx || 0)
     setPhase(ex.last_phase || 'listen1')
     setMcIdx(0); setSelected(new Set()); setRevealed(false)
@@ -845,6 +909,15 @@ export default function AudioExercise({ setView, setInSession }) {
                       </div>
                       <div className="text-sm" style={{ color: 'var(--ink)' }}>{q.justification}</div>
                     </div>
+
+                    {q.source && locateQuote(transcript, q.source) && (
+                      <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+                        <button onClick={() => playQuote(q.source)} className="text-sm font-semibold" style={{ color: 'var(--blue)' }}>
+                          🔊 Stelle im Original-Audio anhören
+                        </button>
+                        <div className="mt-2 text-sm italic leading-snug" style={{ color: 'var(--ink-soft)' }}>„{q.source}"</div>
+                      </div>
+                    )}
 
                     {[...selected].sort().join(',') !== [...correct].sort().join(',') && (
                       <div className="mb-6">
