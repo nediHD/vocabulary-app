@@ -4,12 +4,10 @@ import { jsonrepair } from 'jsonrepair'
 // JSON-String-Werte („efflanqué", „petit" …). Kommt das schließende Zeichen als
 // gerades ASCII-" heraus, beendet es den JSON-String zu früh → kaputtes JSON.
 // Ein öffnendes „ (U+201E) steht aber NIE als JSON-Trenner, sondern immer im
-// String-Inhalt. Deshalb ist es sicher, „…" (schließend curly ” oder gerade ")
-// in einfache 'Anführungszeichen' umzuwandeln – vor dem Parsen.
+// String-Inhalt. Deshalb wandeln wir „…" (schließend gerade " ODER curly ") in ein
+// sauberes curly „…" um – vor dem Parsen: JSON-sicher UND weiterhin schön lesbar.
 function sanitizeInnerQuotes(str) {
-  return String(str)
-    .replace(/„([^„"”]*)[”"]/g, "'$1'") // „…" bzw. „…”
-    .replace(/[“”„]/g, "'")                  // übrige typografische Doppelquotes
+  return String(str).replace(/„([^„"”]*)[”"]/g, '„$1”')
 }
 
 function cleanJSON(str) {
