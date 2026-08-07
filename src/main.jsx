@@ -8,3 +8,11 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>,
 )
+
+// App ist erfolgreich gestartet → Auto-Reload-Sperre lösen,
+// damit ein späterer Deploy erneut einmal nachladen darf.
+try {
+  sessionStorage.removeItem('reloaded-for-stale-assets')
+} catch {
+  /* sessionStorage nicht verfügbar – egal */
+}

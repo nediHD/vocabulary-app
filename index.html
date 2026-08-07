@@ -12,6 +12,30 @@
       rel="stylesheet"
     />
     <title>Vokabular – Nediljko</title>
+    <script>
+      // Nach einem Deploy zeigt eine im Browser-Cache liegende alte index.html
+      // auf CSS/JS-Dateien, die es nicht mehr gibt (404). Dann einmal automatisch
+      // die frische Version nachladen – statt kaputter, ungestylter Seite.
+      (function () {
+        var KEY = 'reloaded-for-stale-assets';
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (!t) return;
+            var url = t.href || t.src || '';
+            var isAsset =
+              (t.tagName === 'LINK' || t.tagName === 'SCRIPT') &&
+              /\/assets\/.*\.(css|js)(\?|$)/.test(url);
+            if (isAsset && !sessionStorage.getItem(KEY)) {
+              sessionStorage.setItem(KEY, '1');
+              location.reload();
+            }
+          },
+          true // Capture-Phase: Ressourcen-Fehler steigen nicht auf
+        );
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
