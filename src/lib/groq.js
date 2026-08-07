@@ -1,3 +1,5 @@
+import { jsonrepair } from 'jsonrepair'
+
 function cleanJSON(str) {
   // Uklanja markdown fence: ```json ... ``` ili ``` ... ```
   let cleaned = String(str || '').trim()
@@ -377,8 +379,14 @@ async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
 }
 
 function parseGroqJSON(content) {
-  try { return JSON.parse(cleanJSON(content)) }
-  catch { throw new Error('Groq: Ungültige JSON-Antwort') }
+  const cleaned = cleanJSON(content)
+  try { return JSON.parse(cleaned) }
+  catch {
+    // llama liefert oft leicht kaputtes JSON (unescapte "-Zeichen, Zeilenumbrüche
+    // in Strings, überflüssige Kommas, abgeschnittene Klammern) → automatisch reparieren.
+    try { return JSON.parse(jsonrepair(cleaned)) }
+    catch { throw new Error('Groq: Ungültige JSON-Antwort') }
+  }
 }
 
 // Segmentiert ein (auch langes) Transkript in sinnvolle Abschnitte (~3 Min, flexibel 2-5 Min).
