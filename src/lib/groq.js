@@ -486,23 +486,24 @@ ${win.join('\n')}`
 }
 
 // Erzeugt den Podcast-Text (B2, baut auf priorSummary auf) + eine kurze summary für den nächsten Abschnitt.
-export async function generatePodcastText(segmentSlice, priorSummary, segIdx) {
-  const context = priorSummary
-    ? `Zur Einordnung (NUR für dich – NICHT vorlesen, NICHT zusammenfassen, NICHT erwähnen). Vorher ging es um: ${priorSummary}\n\n`
+export async function generatePodcastText(segmentSlice, priorSummaries, segIdx) {
+  const sums = Array.isArray(priorSummaries) ? priorSummaries.filter(Boolean) : (priorSummaries ? [priorSummaries] : [])
+  const context = sums.length
+    ? `Kontext der vorigen Abschnitte (NUR damit dir Namen/Bezüge klar sind – NICHT nacherzählen, NICHT zusammenfassen, NICHT erwähnen):\n${sums.map(s => '- ' + s).join('\n')}\n\n`
     : ''
-  const prompt = `Du bist ein Französischlehrer und erklärst einem Lerner (Niveau B2) einen Video-Abschnitt. Du sprichst ihn direkt per "tu" an, wie im Gespräch.
+  const prompt = `Du bist ein Französischlehrer. Du erzählst einem Lerner (Niveau B2) den Inhalt eines Video-Abschnitts VEREINFACHT auf Französisch nach, damit er das Original versteht. Du sprichst ihn per "tu" an.
 
-${context}Transkript dieses Abschnitts (Französisch, kann Erkennungsfehler enthalten):
+${context}Transkript DIESES Abschnitts (Französisch, kann Erkennungsfehler enthalten):
 """${segmentSlice}"""
 
-Aufgabe – schreibe den Erklärtext auf FRANZÖSISCH:
-1. Steig DIREKT in den Inhalt ein. Erkläre in einfachem Französisch, was in diesem Abschnitt passiert, und erkläre dabei die WICHTIGEN Wörter/Ausdrücke eingebettet im Text (was sie bedeuten).
-2. VERBOTEN am Anfang: keine Begrüßung, KEINE Wiederholung/Zusammenfassung des vorigen Teils, kein "tu te souviens…", kein "on avait vu…", keine Ankündigung einer neuen Folge.
-3. VERBOTEN am Ende: KEINE Fragen an den Lerner ("qu'en penses-tu ?", "tu es prêt ?"), KEINE Floskeln ("reste à l'écoute", "on continue dans le prochain épisode", "sois attentif"). Hör einfach auf, sobald der Inhalt erklärt ist.
-4. Das Transkript enthält oft Erkennungsfehler (falsch geschriebene Namen/Wörter). Korrigiere erkennbare Fehler STILL und plappere die falschen Formen NICHT nach.
-5. Kein Füllwerk, keine Wiederholungen desselben Satzes. Dichter, konkreter Text.
+Aufgabe – schreibe den Text auf FRANZÖSISCH:
+1. Erzähle NUR den Inhalt DIESES Abschnitts vereinfacht nach – NAH am Original ("fast dasselbe": gleiche Aussagen, gleiche Reihenfolge), nur in einfacherem, klarerem Französisch, damit der Lerner es versteht. Ein schwieriges Wort/einen Ausdruck darfst du ganz kurz eingebettet erklären, wo nötig – aber KEINE langen Exkurse, es bleibt eine Nacherzählung.
+2. VERBOTEN am Anfang: keine Begrüßung, KEINE Wiederholung/Zusammenfassung vorheriger Abschnitte, kein "tu te souviens…", kein "on avait vu…", keine Ankündigung ("dans le prochain épisode…").
+3. VERBOTEN am Ende: KEINE Fragen an den Lerner ("qu'en penses-tu ?", "tu es prêt ?"), KEINE Floskeln ("reste à l'écoute", "on continue…"), KEINE Moral/Ratschläge. Hör einfach auf, sobald der Inhalt durch ist.
+4. Das Transkript enthält oft Erkennungsfehler (falsch geschriebene Namen/Wörter). Korrigiere erkennbare Fehler STILL (nutze den Kontext oben) und plappere die falschen Formen NICHT nach.
+5. Kein Füllwerk, keine wiederholten Vergleiche ("c'est comme si…"), kein doppelter Satz.
 
-Flüssiger, gesprochener Stil, KEINE Aufzählungszeichen/Nummerierung. Mindestens 1500 Zeichen, höchstens 4000 Zeichen. Antworte NUR mit JSON ohne Markdown:
+Flüssiger, gesprochener Stil, KEINE Aufzählungszeichen/Nummerierung. Mindestens 1200 Zeichen, höchstens 4000 Zeichen. Antworte NUR mit JSON ohne Markdown:
 {"podcast_text":"...","summary":"1-2 Sätze Zusammenfassung dieses Abschnitts auf Französisch"}`
   const parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 }))
   return {
@@ -513,7 +514,7 @@ Flüssiger, gesprochener Stil, KEINE Aufzählungszeichen/Nummerierung. Mindesten
 
 // 3-4 Multiple-Choice-Fragen (4 Optionen, 1-2 richtig, mit Begründung), an den Podcast gekoppelt.
 export async function generateMCQuestions(podcastText, segmentSlice) {
-  const prompt = `Erstelle 3-4 Multiple-Choice-Verständnisfragen auf FRANZÖSISCH zu diesem Video-Abschnitt.
+  const prompt = `Erstelle 3-4 Multiple-Choice-Fragen auf FRANZÖSISCH, die prüfen, ob der Lerner den französischen Abschnitt SPRACHLICH VERSTANDEN hat.
 
 Transkript des Abschnitts (Original-Audio – DAS ist maßgeblich):
 """${String(segmentSlice || '').slice(0, 3500)}"""
@@ -521,12 +522,16 @@ Transkript des Abschnitts (Original-Audio – DAS ist maßgeblich):
 Podcast (Erklärung dazu, nur Hilfskontext):
 """${String(podcastText || '').slice(0, 4000)}"""
 
+ZIEL: KEIN bloßes Faktenraten, sondern Textverständnis auf Französisch – der Sinn einer Aussage, die Bedeutung eines Ausdrucks/Worts IM KONTEXT, wer/was mit etwas gemeint ist, was eine Formulierung impliziert.
+
 Regeln:
-- Jede Frage hat genau 4 Antwortoptionen. 1 ODER 2 sind richtig (variiere – mal 1, mal 2). Verrate NICHT, wie viele richtig sind.
-- STRENG VERANKERT: Jede richtige Antwort muss sich WÖRTLICH aus dem TRANSKRIPT belegen lassen. Rate NICHTS, erfinde keine Fakten, kein "probablement", keine "pratique courante"-Vermutungen. Steht etwas nicht klar im Transkript, frag es NICHT.
-- Die falschen Optionen sind eindeutig falsch (nicht im Transkript belegbar), aber trotzdem plausibel.
+- Jede Frage hat genau 4 Antwortoptionen. 1 ODER 2 sind richtig (variiere). Verrate NICHT, wie viele.
+- STRENG VERANKERT: Jede richtige Antwort muss sich WÖRTLICH aus dem TRANSKRIPT belegen lassen. Rate NICHTS, erfinde keine Fakten, kein "probablement".
+- Baue MINDESTENS EINE knifflige Frage ein (feines Detail, leicht zu überhören), damit echtes Verstehen geprüft wird – nicht zu offensichtlich.
+- KEINE zwei Fragen mit derselben Antwort oder demselben Inhalt. Jede Frage prüft etwas ANDERES.
+- Die falschen Optionen sind eindeutig falsch, aber trotzdem plausibel.
 - "justification": 1 Satz auf Französisch, warum die richtige(n) Antwort(en) stimmt/stimmen.
-- "source": kopiere hier WÖRTLICH den kurzen Satz bzw. Ausschnitt AUS DEM TRANSKRIPT (nicht aus dem Podcast, NICHT korrigiert, exakt dieselben Wörter), an dem die Antwort gesagt wird. Damit kann der Lerner genau diese Stelle im Original-Audio anhören. Halte "source" kurz (ein Satz).
+- "source": kopiere hier WÖRTLICH den kurzen Satz AUS DEM TRANSKRIPT (nicht aus dem Podcast, NICHT korrigiert, exakt dieselben Wörter), an dem die Antwort gesagt wird. Damit kann der Lerner genau diese Stelle im Original-Audio anhören. Halte "source" kurz (ein Satz).
 
 Antworte NUR mit JSON ohne Markdown:
 {"questions":[{"statement":"...","options":["A","B","C","D"],"correct":[0],"justification":"...","source":"wörtliches Zitat aus dem Transkript"}]}`

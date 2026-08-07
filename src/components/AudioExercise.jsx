@@ -200,7 +200,7 @@ export default function AudioExercise({ setView, setInSession }) {
   const [adRanges, setAdRanges] = useState([])
   const [transcript, setTranscript] = useState([])
   const [segIdx, setSegIdx] = useState(0)
-  const [phase, setPhase] = useState('listen1') // listen1 | podcast | listen2 | mc
+  const [phase, setPhase] = useState('listen1') // listen1 | podcast | preview | listen2 | mc
   const [playerReady, setPlayerReady] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [playPos, setPlayPos] = useState(0) // vergangene Sekunden im aktuellen Segment
@@ -351,9 +351,9 @@ export default function AudioExercise({ setView, setInSession }) {
     inflight.current.add(idx)
     setGenError('')
     try {
-      const priorSummary = idx > 0 ? (segments[idx - 1]?.summary || '') : ''
+      const priorSummaries = segments.slice(Math.max(0, idx - 5), idx).map(s => s?.summary || '').filter(Boolean)
       setGenProgress('Podcast-Text wird erstellt…')
-      const { podcast_text, summary } = await generatePodcastText(seg.transcript_slice, priorSummary, idx)
+      const { podcast_text, summary } = await generatePodcastText(seg.transcript_slice, priorSummaries, idx)
       setGenProgress('Fragen werden erstellt…')
       const questions = await generateMCQuestions(podcast_text, seg.transcript_slice)
       const blob = await synthesizePodcastMp3(podcast_text, { onProgress: setGenProgress })
@@ -780,6 +780,39 @@ export default function AudioExercise({ setView, setInSession }) {
         </div>
       )}
 
+      {/* Phase: preview – Fragen nur ansehen (ohne Antworten), dann nochmal hören */}
+      {phase === 'preview' && (
+        <div className="flex flex-col items-center py-10 sm:py-16">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--blue)' }}>
+            Fragen · Vorschau
+          </div>
+          <p className="mb-6 max-w-md text-center text-sm" style={{ color: 'var(--ink-soft)' }}>
+            Lies die Fragen einmal durch. Danach hörst du den Abschnitt nochmal – jetzt weißt du, worauf du achten musst. (Beantwortet wird erst danach.)
+          </p>
+
+          {questions.length === 0 ? (
+            <p className="mb-8 text-sm" style={{ color: 'var(--ink-faint)' }}>
+              {genProgress || 'Fragen werden noch erstellt…'}
+            </p>
+          ) : (
+            <div className="mb-8 w-full max-w-xl space-y-3">
+              {questions.map((q, i) => (
+                <div key={i} className="rounded-2xl border p-4" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+                  <span className="mr-2 font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>{i + 1}.</span>
+                  <span className="text-sm" style={{ color: 'var(--ink)' }}>{q.statement}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={() => goPhase('listen2')}
+            className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+            style={BLUE} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>
+            Nochmal hören →
+          </button>
+        </div>
+      )}
+
       {/* Phase: podcast */}
       {phase === 'podcast' && (
         <div className="flex flex-col items-center py-10 sm:py-16">
@@ -828,10 +861,10 @@ export default function AudioExercise({ setView, setInSession }) {
               <div className="mb-8">
                 <AskPanel key={`p-${seg.id || segIdx}`} podcastText={seg.podcast_text} transcriptSlice={seg.transcript_slice} />
               </div>
-              <button onClick={() => goPhase('listen2')}
+              <button onClick={() => goPhase('preview')}
                 className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={BLUE} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>
-                Weiter →
+                Fragen ansehen →
               </button>
             </>
           )}
