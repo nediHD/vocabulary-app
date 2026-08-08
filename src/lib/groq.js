@@ -736,7 +736,7 @@ export async function generateGrammarSet({ path, topic, style = 'mixed', section
     : 'KEINE Hinweise: lass "hint" weg oder leer.'
 
   const typeLines = [
-    '- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), "correct" Index (0-basiert) der EINEN richtigen. Gut für „welche Variante/Stellung/Form ist richtig?".',
+    '- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), die ALLE VERSCHIEDEN sind (NIEMALS dieselbe Form zweimal!), "correct" Index (0-basiert) der EINEN richtigen. Die falschen Optionen sind plausible, aber eindeutig falsche ANDERE Formen. Gut für „welche Variante/Stellung/Form ist richtig?".',
     '- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" ein VOLLSTÄNDIGER Satz mit Kontext, jede Lücke als _____ (kein 2-Wort-Fragment). "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~markiertem Teil~","hint":"deutscher Hinweis"}.',
     allowTable ? '- "table" (Verb-Konjugation, NUR bei Verbzeiten/-modi): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.' : '',
     '- "transform" (umformen): "prompt" deutsche Anweisung + ein VOLLSTÄNDIGER französischer Satz mit Ergänzung (Objekt/Ort/Zeit), NIE nur Subjekt+Verb (nicht "Nous mangeons", sondern z. B. "Nous mangeons ensemble le dimanche."). "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".',
@@ -799,6 +799,9 @@ Beispiel für das THEMA Adjektiv-Stellung (passe Inhalt an DEIN Thema an!):
         const options = Array.isArray(e.options) ? e.options.map(optText) : []
         const correct = Number(e.correct)
         if (options.length < 2 || options.some(o => !o) || !Number.isInteger(correct) || correct < 0 || correct >= options.length) return null
+        // Doppelte Optionen (z. B. zweimal "jouais") machen die Aufgabe kaputt → verwerfen.
+        const uniq = new Set(options.map(o => o.trim().toLowerCase()))
+        if (uniq.size !== options.length) return null
         return { type: 'choice', prompt: String(e.prompt || ''), de, options, correct, explain: String(e.explain || ''), weight: 1 }
       }
       if (t === 'table') {
