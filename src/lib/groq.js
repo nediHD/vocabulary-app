@@ -737,9 +737,9 @@ export async function generateGrammarSet({ path, topic, style = 'mixed', section
 
   const typeLines = [
     '- "choice" (antippen): "prompt" Satz/Frage, "options" 3–4 EINFACHE STRINGS (keine Objekte!), "correct" Index (0-basiert) der EINEN richtigen. Gut für „welche Variante/Stellung/Form ist richtig?".',
-    '- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" mit jeder Lücke als _____ . "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~markiertem Teil~","hint":"deutscher Hinweis"}.',
+    '- "cloze" (schreiben, EINE oder MEHRERE Lücken): "prompt" ein VOLLSTÄNDIGER Satz mit Kontext, jede Lücke als _____ (kein 2-Wort-Fragment). "blanks": Array in Reihenfolge der Lücken, je {"answer":"exakte Form","display":"Form mit ~markiertem Teil~","hint":"deutscher Hinweis"}.',
     allowTable ? '- "table" (Verb-Konjugation, NUR bei Verbzeiten/-modi): "verb", "label" (z. B. "Imparfait von finir"), "rows" genau 6: {"p":"je","answer":"finissais","display":"finiss~ais~"}.' : '',
-    '- "transform" (umformen): "prompt" deutsche Anweisung + französischer Satz, "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".',
+    '- "transform" (umformen): "prompt" deutsche Anweisung + ein VOLLSTÄNDIGER französischer Satz mit Ergänzung (Objekt/Ort/Zeit), NIE nur Subjekt+Verb (nicht "Nous mangeons", sondern z. B. "Nous mangeons ensemble le dimanche."). "answer" kompletter umgeformter Satz, "answer_display" mit ~geändertem Teil~, "hint".',
     '- "open" (frei, KI-bewertet): "prompt" eine Aufgabe, bei der der Lerner selbst einen Satz bildet — die Aufgabe MUSS die Regel DIESES Themas üben. "sample" eine Musterlösung.',
   ].filter(Boolean).join('\n')
 
@@ -752,7 +752,8 @@ THEMA (nur darum geht es): ${path} — „${topic}".
 - Prüfe NICHTS anderes.${allowTable ? '' : ' KEINE Verbkonjugation, KEINE Zeitformen'} — kein fremdes Grammatikkapitel, kein reines Vokabelraten.
 - Geht es im Thema um STELLUNG / REIHENFOLGE / POSITION, dann teste die WORTSTELLUNG: der Lerner muss das Element (z. B. das Adjektiv) an die richtige Stelle setzen — nicht raten, welches Wort inhaltlich passt.
 - Jede Übung muss eine EINDEUTIGE Lösung haben, die sich aus der Regel ergibt. Keine Lücke, deren Antwort man nicht wissen kann.
-- Sätze kurz, klar, natürlich. Lieber einfache Sätze mit sauberer Regel als komplizierte, schiefe Sätze.
+- VOLLSTÄNDIGE, SINNVOLLE SÄTZE — kein nacktes Fragment. Verboten sind 2-Wort-Aufgaben wie "nous mangeons" oder "un chien". Jeder Satz hat Subjekt + Verb + Ergänzung (Objekt, Ort, Zeit …) und ergibt inhaltlich Sinn (z. B. "Nous mangeons au restaurant chaque dimanche."). Klar und natürlich, aber NICHT auf ein Minimum verkürzt.
+- KONTEXT, der die Form motiviert: Wenn eine Form typische Auslöser hat, baue sie ein (Imparfait = Gewohnheit/Beschreibung → "chaque jour", "quand j'étais petit", "autrefois"; Passé composé = einmalige Handlung → "hier", "soudain"; usw.). So lernt der Lerner WANN man die Form benutzt, nicht nur WIE.
 
 ${theory ? `📖 REGELN & AUSNAHMEN DIESES THEMAS (die Theorie – alle Fälle sollen geprüft werden):\n${theory}\n` : ''}
 ${guide ? `📋 ÜBUNGS-LEITFADEN für genau dieses Thema (VERBINDLICH — halte dich exakt daran):\n${guide}\n` : ''}
