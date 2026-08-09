@@ -195,6 +195,8 @@ WICHTIGSTE REGEL – Lückentext: Jedes Vorkommen eines Lernworts im Text wird d
 
 Die Wörter dürfen natürlich gebeugt sein (Plural, konjugierte Verbform, weibliche Form, Zeitform usw.), so wie es der Satz verlangt. Andere (nicht gelernte) Wörter bleiben normal im Text.
 
+ARTIKEL-REGEL (WICHTIG): Ist ein Lernwort ein Nomen mit Artikel (z. B. "la gorgée", "le pouce"), entscheide pro Lücke EINDEUTIG: ENTWEDER die Lücke umfasst Artikel + Nomen (dann steht davor KEIN weiterer Artikel/Determinant) ODER der Artikel/Determinant (un, une, le, la, mon, ce, du, de …) bleibt im Klartext VOR der Lücke stehen und die Lücke ist NUR das Nomen (die "answer" OHNE Artikel). Es darf NIEMALS ein doppelter Artikel entstehen wie "une la gorgée". Die "answer" muss zusammen mit den umstehenden Wörtern grammatisch korrekt in den Satz passen.
+
 Für jede Lücke gib an:
 - "n": die Nummer des Platzhalters
 - "answer": die EXAKTE Form, wie sie an dieser Stelle in den Satz gehört (die gebeugte Form)
@@ -225,8 +227,25 @@ Jetzt deine Antwort:`
     }))
     .filter(b => Number.isInteger(b.n) && b.answer.length > 0 && text.includes(`{{${b.n}}}`))
 
-  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiger Lückentext erzeugt')
-  return { text, blanks }
+  // Doppelte Artikel verhindern: steht direkt VOR der Lücke bereits ein Determinant
+  // (une/le/mon/ce/du/l' …), darf die Antwort keinen weiteren Artikel enthalten
+  // (sonst entsteht "une la gorgée"). Dann Artikel aus der Antwort streichen.
+  const DET_BEFORE = /(?:^|[\s('"«.,;:!?–-])(?:un|une|des|le|la|les|du|au|aux|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos|leur|leurs|ce|cet|cette|ces)\s+$/i
+  const APOS_BEFORE = /l['’]\s*$/i
+  const ART_LEAD = /^(?:un|une|des|le|la|les)\s+/i
+  const APOS_LEAD = /^l['’]\s*/i
+  for (const b of blanks) {
+    const i = text.indexOf(`{{${b.n}}}`)
+    if (i <= 0) continue
+    const before = text.slice(0, i)
+    if (DET_BEFORE.test(before) || APOS_BEFORE.test(before)) {
+      b.answer = b.answer.replace(ART_LEAD, '').replace(APOS_LEAD, '').trim()
+    }
+  }
+
+  const cleaned = blanks.filter(b => b.answer.length > 0)
+  if (!text || cleaned.length === 0) throw new Error('Groq: Kein gültiger Lückentext erzeugt')
+  return { text, blanks: cleaned }
 }
 
 export async function segmentTranscript(transcript, durationSec) {
