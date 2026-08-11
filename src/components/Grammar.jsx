@@ -178,9 +178,6 @@ function TheoryView({ section, group, topic, onBack }) {
       {loading
         ? <div className="rounded-3xl border p-8 text-center" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink-soft)' }}>Lädt…</div>
         : <Explanation data={data} text={text} />}
-      <div className="mt-5 rounded-2xl border p-4 text-sm" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink-soft)' }}>
-        Üben kannst du dieses Thema über <span className="font-semibold" style={{ color: 'var(--blue)' }}>Grammatik üben</span> auf der Startseite.
-      </div>
     </div>
   )
 }
@@ -210,7 +207,7 @@ export default function Grammar({ setView }) {
 
       <div className="svc-card mb-6">
         <h2 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Grammatik nachschlagen</h2>
-        <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Alle Themen zum Nachlesen. Zum Üben: „Grammatik üben" auf der Startseite.</p>
+        <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Alle Themen zum Nachlesen.</p>
       </div>
 
       <div className="space-y-3">
