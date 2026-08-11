@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 const services = [
   { name: 'Supabase', mono: 'S', accent: '#3ecf8e', cat: 'Backend', url: 'https://supabase.com',
-    use: 'Datenbank, Storage & Edge Functions (Projekt „fre")', key: 'VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY', where: 'Client' },
+    use: 'Datenbank, Storage & Edge Functions (Projekt „vokabular")', key: 'VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY', where: 'Client' },
   { name: 'Groq', mono: 'G', accent: '#f55036', cat: 'KI', url: 'https://console.groq.com',
     use: 'LLM llama-3.3-70b — Texte, Gruppierung, Segmente, Podcast, Fragen', key: 'VITE_GROQ_API_KEY', where: 'Client' },
   { name: 'Supadata', mono: 'Sd', accent: '#3b6ef0', cat: 'Medien', url: 'https://supadata.ai',
