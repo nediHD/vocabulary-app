@@ -131,6 +131,21 @@ export default function Dashboard({ setView, setInSession }) {
           <span className="font-mono text-sm opacity-80">Theorie →</span>
         </button>
 
+        <button
+          onClick={() => setView('grammar-practice')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
+            color: 'var(--ink)',
+          }}
+        >
+          <span>Grammatik üben ✍️</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
+            Verben · Zeitformen →
+          </span>
+        </button>
+
         {sectionLabel('Weiteres')}
         <button
           onClick={() => setView('audio')}

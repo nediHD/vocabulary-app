@@ -248,6 +248,68 @@ Jetzt deine Antwort:`
   return { text, blanks: cleaned }
 }
 
+// ---- Grammatik-Lückentext: fällige VERBEN in (max) 2 zufälligen Zeitformen üben ----
+// verbs: [{ french (Infinitiv), german }]   forms: [{ name }]  (die 2 Zeitformen)
+// return: { text, blanks:[{ n, answer, de, base, tense, note }] }
+export async function generateGrammarCloze(verbs, forms) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+
+  const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
+  const tenseNames = forms.map(f => f.name)
+  const tenseList = tenseNames.join(' UND ')
+
+  const prompt = `Schreibe eine kurze zusammenhängende Erzählung auf Französisch – eine kleine Szene mit Anfang, Mitte und Ende – als LÜCKENTEXT zum Üben von Verbformen.
+
+ZU ÜBENDE VERBEN (Grundform/Infinitiv): ${verbList}
+
+ZU ÜBENDE ZEITFORMEN: ${tenseList}
+
+LÄNGE: ungefähr 1400 Zeichen (mindestens 1100, höchstens 1800).
+
+AUFGABE:
+- Jedes Vorkommen eines der zu übenden Verben wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend nummeriert in Reihenfolge des Auftretens). An der Platzhalter-Stelle darf das konjugierte Verb NICHT im Klartext stehen – dort steht nur der Platzhalter.
+- Jedes zu übende Verb muss mindestens einmal vorkommen; kommt es mehrmals vor, ist JEDES Vorkommen ein eigener Platzhalter.
+- Jedes Verb an einer Lücke ist in GENAU EINER der zu übenden Zeitformen konjugiert (${tenseList}). BEIDE Zeitformen müssen im Text vorkommen. Verteile die Lücken sinnvoll auf beide Zeitformen.
+- Wähle einen erzählerischen Kontext, der die jeweilige Zeitform natürlich motiviert (z. B. Imparfait für Gewohnheiten/Beschreibungen in der Vergangenheit, Passé composé für einmalige abgeschlossene Handlungen, Futur simple für Zukünftiges, Subjonctif nach que/il faut que …).
+- VOLLSTÄNDIGE, SINNVOLLE SÄTZE – kein nacktes Fragment. Andere (nicht zu übende) Wörter bleiben normal im Klartext. Reflexive Verben behalten ihr Reflexivpronomen (se/s') sinnvoll an der Lücke.
+
+Für jede Lücke gib an:
+- "n": die Nummer des Platzhalters
+- "answer": die EXAKTE konjugierte Verbform, wie sie an dieser Stelle in den Satz gehört (inkl. Hilfsverb bzw. Reflexivpronomen falls nötig, z. B. "ai mangé", "me suis levé")
+- "de": die deutsche Bedeutung des Verbs (aus der Liste oben)
+- "base": die Grundform/Infinitiv (wie in der Liste)
+- "tense": welche Zeitform hier verlangt ist – GENAU einer dieser Namen: ${tenseNames.map(n => `"${n}"`).join(', ')}
+- "note": kurze deutsche Erklärung der Form (z. B. "1. Person Singular Imparfait von manger")
+
+WICHTIG: Verwende innerhalb der Texte einfache 'Anführungszeichen', niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown, ohne Backticks, ohne Text außerhalb des JSON.
+
+Beispiel-Format:
+{"text":"Quand j'étais petit, je {{1}} souvent au parc. Un jour, j'{{2}} un vieux chien qui dormait sous un arbre.","blanks":[{"n":1,"answer":"jouais","de":"spielen","base":"jouer","tense":"Imparfait","note":"1. Person Singular Imparfait von jouer"},{"n":2,"answer":"ai vu","de":"sehen","base":"voir","tense":"Passé composé","note":"1. Person Singular Passé composé von voir"}]}
+
+Jetzt deine Antwort:`
+
+  let parsed
+  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 })) }
+  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.4 })) }
+
+  const text = String(parsed?.text || '')
+  const blanks = (Array.isArray(parsed?.blanks) ? parsed.blanks : [])
+    .map(b => ({
+      n: Number(b.n),
+      answer: String(b.answer || '').trim(),
+      de: String(b.de || '').trim(),
+      base: String(b.base || '').trim(),
+      tense: String(b.tense || '').trim(),
+      note: String(b.note || '').trim(),
+    }))
+    .filter(b => Number.isInteger(b.n) && b.answer.length > 0 && text.includes(`{{${b.n}}}`))
+
+  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiger Grammatik-Lückentext erzeugt')
+  return { text, blanks }
+}
+
 export async function segmentTranscript(transcript, durationSec) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
