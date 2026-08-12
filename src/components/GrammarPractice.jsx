@@ -46,6 +46,12 @@ function norm(s) {
     .trim()
 }
 
+// Robuster Vergleichsschlüssel für Infinitive (Reflexivpronomen se/s' ignorieren),
+// damit "se lever" und "lever" bei der Abdeckungsprüfung als gleich gelten.
+function baseKey(s) {
+  return (s || '').toString().toLowerCase().trim().replace(/^s['’]?\s*/, '').replace(/^se\s+/, '').trim()
+}
+
 // Lückentext eines Kapitels in Klartext auflösen (für den Story-Kontext des nächsten Kapitels).
 function resolveText(text, blanks) {
   return String(text || '').replace(/\{\{(\d+)\}\}/g, (_, d) => {
@@ -137,7 +143,7 @@ export default function GrammarPractice({ setView, setInSession }) {
 
   // Session-Kontext (für Story-Fortsetzung + Abdeckung)
   const [storyResolved, setStoryResolved] = useState('')
-  const [usedBases, setUsedBases] = useState([])
+  const [coveredBases, setCoveredBases] = useState([]) // baseKey() der bereits als Lücke vorgekommenen Verben
   const [coveredPersons, setCoveredPersons] = useState([])
 
   useEffect(() => {
@@ -164,7 +170,8 @@ export default function GrammarPractice({ setView, setInSession }) {
       const due = (data || []).filter(c => new Date(c.next_review_at) <= new Date(now))
       if (due.length === 0) { setPhase('none'); return }
 
-      const chosenVerbs = pickN(due, 12).map(c => ({ french: c.french, german: c.german }))
+      // ALLE heute fälligen Verben – jedes muss über die Session mindestens einmal drankommen.
+      const chosenVerbs = pickN(due, due.length).map(c => ({ french: c.french, german: c.german }))
       const chosenForms = pickN(verbForms(), 2)
 
       setVerbs(chosenVerbs)
@@ -182,13 +189,33 @@ export default function GrammarPractice({ setView, setInSession }) {
     setGenerating(true)
     setError('')
     try {
-      const needed = ALL_PERSONS.filter(p => !ctx.covered.includes(p))
+      // Noch nicht als Lücke vorgekommene Verben ermitteln.
+      const remaining = verbs.filter(v => !ctx.coveredBases.includes(baseKey(v.french)))
+      const chaptersLeft = TOTAL - index + 1
+      let required
+      if (remaining.length === 0) {
+        // Alles abgedeckt → zur Wiederholung 1–2 bereits geübte Verben nehmen.
+        required = pickN(verbs, Math.min(2, verbs.length))
+      } else if (index >= TOTAL) {
+        // Letztes Kapitel: alle verbliebenen Verben MÜSSEN noch rein.
+        required = remaining
+      } else {
+        // Gleichmäßig auf die restlichen Kapitel verteilen (aber max. 5 pro Kapitel).
+        const per = Math.min(5, Math.max(1, Math.ceil(remaining.length / chaptersLeft)))
+        required = remaining.slice(0, per)
+      }
+      const requiredKeys = new Set(required.map(v => baseKey(v.french)))
+      const reuse = pickN(
+        verbs.filter(v => ctx.coveredBases.includes(baseKey(v.french)) && !requiredKeys.has(baseKey(v.french))),
+        3,
+      )
+      const neededP = ALL_PERSONS.filter(p => !ctx.coveredPersons.includes(p))
+
       const result = await generateGrammarStoryRun({
-        verbs, forms,
+        verbs: required, reuseVerbs: reuse, forms,
         chapterIndex: index, totalChapters: TOTAL,
         storySoFar: ctx.story,
-        neededPersons: needed,
-        usedBases: ctx.used,
+        neededPersons: neededP,
       })
       setRun(result)
       setAnswers({})
@@ -207,25 +234,25 @@ export default function GrammarPractice({ setView, setInSession }) {
   const startExercise = () => {
     setChapterIndex(1)
     setStoryResolved('')
-    setUsedBases([])
+    setCoveredBases([])
     setCoveredPersons([])
     setPhase('run')
-    generateChapter(1, { story: '', used: [], covered: [] })
+    generateChapter(1, { story: '', coveredBases: [], coveredPersons: [] })
   }
 
   const handleNext = () => {
     const resolved = resolveText(run.text, run.blanks)
     const newStory = storyResolved ? `${storyResolved}\n\n${resolved}` : resolved
-    const newUsed = Array.from(new Set([...usedBases, ...run.blanks.map(b => b.base).filter(Boolean)]))
-    const newCovered = Array.from(new Set([...coveredPersons, ...run.blanks.map(b => b.person).filter(Boolean)]))
+    const newBases = Array.from(new Set([...coveredBases, ...run.blanks.map(b => baseKey(b.base)).filter(Boolean)]))
+    const newPersons = Array.from(new Set([...coveredPersons, ...run.blanks.map(b => b.person).filter(Boolean)]))
     setStoryResolved(newStory)
-    setUsedBases(newUsed)
-    setCoveredPersons(newCovered)
+    setCoveredBases(newBases)
+    setCoveredPersons(newPersons)
 
     if (chapterIndex >= TOTAL) { setPhase('finished'); return }
     const next = chapterIndex + 1
     setChapterIndex(next)
-    generateChapter(next, { story: newStory, used: newUsed, covered: newCovered })
+    generateChapter(next, { story: newStory, coveredBases: newBases, coveredPersons: newPersons })
   }
 
   const handleStop = () => {

@@ -273,14 +273,14 @@ export async function generateGrammarStoryRun(opts) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
   const {
-    verbs = [], forms = [], chapterIndex = 1, totalChapters = 7,
-    storySoFar = '', neededPersons = [], usedBases = [],
+    verbs = [], reuseVerbs = [], forms = [], chapterIndex = 1, totalChapters = 7,
+    storySoFar = '', neededPersons = [],
   } = opts || {}
 
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
+  const reuseList = reuseVerbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
   const tenseList = tenseNames.join(' UND ')
-  const unused = verbs.filter(v => !usedBases.includes(v.french)).map(v => v.french)
   const isFirst = chapterIndex <= 1 || !storySoFar
   const isLast = chapterIndex >= totalChapters
 
@@ -293,17 +293,17 @@ ${isFirst
   : `BISHERIGE GESCHICHTE (Kontext, führe sie natürlich WEITER – nicht neu anfangen, nicht wiederholen):\n"""\n${recap}\n"""`}
 ${isLast ? 'Dies ist das LETZTE Kapitel – bringe die Geschichte zu einem runden Abschluss.' : ''}
 
-ZU ÜBENDE VERBEN (Grundform/Infinitiv): ${verbList}
-${unused.length ? `BEVORZUGE in diesem Kapitel diese noch nicht geübten Verben: ${unused.join(', ')}.` : ''}
+ZU ÜBENDE VERBEN – diese MÜSSEN in diesem Kapitel ALLE als Lücke vorkommen (Grundform/Infinitiv): ${verbList}
+${reuseList ? `Optional darfst du zusätzlich diese bereits geübten Verben erneut als Lücke einbauen: ${reuseList}.` : ''}
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
 REGELN:
 - Länge dieses Kapitels: ca. 700–1200 Zeichen, in natürlich fließenden, vollständigen Sätzen. Die Geschichte darf ruhig ausführlich sein.
-- NUR die oben gelisteten zu übenden Verben werden zu LÜCKEN. ALLE anderen Verben im Text bleiben normaler Klartext in beliebiger Form – sie werden NICHT zu Lücken und müssen NICHT in den Zielzeitformen stehen.
-- Zwinge nichts: Ein zu übendes Verb wird nur DORT zur Lücke, wo eine der beiden Zielzeitformen (${tenseList}) natürlich in die Geschichte passt. Es müssen NICHT alle gelisteten Verben vorkommen – lieber weniger, dafür natürlich passend.
-- Verwende 1 bis 5 Lücken in diesem Kapitel. NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
-- Jede Lücke ersetzt genau EIN konjugiertes (zu übendes) Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
+- PFLICHT: JEDES oben geforderte Verb kommt in diesem Kapitel mindestens einmal als Lücke vor, konjugiert in EINER der 2 Zeitformen (${tenseList}). Gestalte Kontext und Person so, dass es natürlich klingt.
+- NUR die geforderten (und optional die zusätzlichen) Verben werden zu LÜCKEN. ALLE anderen Verben im Text bleiben normaler Klartext in beliebiger Form – sie werden NICHT zu Lücken und müssen NICHT in den Zielzeitformen stehen.
+- NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
+- Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
 - Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert.
 - Wo es natürlich passt, decke verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles); nutze ruhig Dialog/Ansprache. Aber NUR wenn es natürlich klingt – erzwinge keine unpassende Person.${neededPersons.length ? ` Versuche – nur wenn es natürlich passt – diese Personen einzubauen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
 - Wähle einen Kontext, der die jeweilige Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
