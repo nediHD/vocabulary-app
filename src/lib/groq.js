@@ -248,52 +248,86 @@ Jetzt deine Antwort:`
   return { text, blanks: cleaned }
 }
 
-// ---- Grammatik-Lückentext: fällige VERBEN in (max) 2 zufälligen Zeitformen üben ----
-// verbs: [{ french (Infinitiv), german }]   forms: [{ name }]  (die 2 Zeitformen)
-// return: { text, blanks:[{ n, answer, de, base, tense, note }] }
-export async function generateGrammarCloze(verbs, forms) {
+// ---- Grammatik-Story: EIN Kapitel eines fortlaufenden Lückentexts ----
+// Die Session besteht aus mehreren Kapiteln (Runs), die zusammen EINE Geschichte
+// erzählen. Pro Kapitel werden 1–5 der fälligen Verben in den 2 Zeitformen geübt;
+// über die ganze Session werden möglichst alle Personen (je/tu/il/nous/vous/ils)
+// und beide Zeitformen abgedeckt.
+//
+// opts: { verbs:[{french,german}], forms:[{name}], chapterIndex, totalChapters,
+//         storySoFar:string, neededPersons:[code], usedBases:[infinitiv] }
+// return: { title, text, blanks:[{ n, answer, de, base, tense, person, reason, note }] }
+//
+// person-Codes: '1sg','2sg','3sg','1pl','2pl','3pl'
+const PERSON_LABEL = {
+  '1sg': '1. Person Singular (je)',
+  '2sg': '2. Person Singular (tu)',
+  '3sg': '3. Person Singular (il/elle/on)',
+  '1pl': '1. Person Plural (nous)',
+  '2pl': '2. Person Plural (vous)',
+  '3pl': '3. Person Plural (ils/elles)',
+}
+
+export async function generateGrammarStoryRun(opts) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
+  const {
+    verbs = [], forms = [], chapterIndex = 1, totalChapters = 7,
+    storySoFar = '', neededPersons = [], usedBases = [],
+  } = opts || {}
 
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
   const tenseList = tenseNames.join(' UND ')
+  const unused = verbs.filter(v => !usedBases.includes(v.french)).map(v => v.french)
+  const isFirst = chapterIndex <= 1 || !storySoFar
+  const isLast = chapterIndex >= totalChapters
 
-  const prompt = `Schreibe eine kurze zusammenhängende Erzählung auf Französisch – eine kleine Szene mit Anfang, Mitte und Ende – als LÜCKENTEXT zum Üben von Verbformen.
+  const recap = capText(String(storySoFar || ''), 1500)
+
+  const prompt = `Du schreibst KAPITEL ${chapterIndex} von ${totalChapters} einer fortlaufenden französischen Geschichte. Die Kapitel ergeben ZUSAMMEN eine einzige, sich entwickelnde Geschichte. Jedes Kapitel ist ein LÜCKENTEXT zum Üben von Verbformen.
+
+${isFirst
+  ? 'Dies ist das ERSTE Kapitel – beginne die Geschichte (führe Figur/Ort/Situation ein).'
+  : `BISHERIGE GESCHICHTE (Kontext, führe sie natürlich WEITER – nicht neu anfangen, nicht wiederholen):\n"""\n${recap}\n"""`}
+${isLast ? 'Dies ist das LETZTE Kapitel – bringe die Geschichte zu einem runden Abschluss.' : ''}
 
 ZU ÜBENDE VERBEN (Grundform/Infinitiv): ${verbList}
+${unused.length ? `BEVORZUGE in diesem Kapitel diese noch nicht geübten Verben: ${unused.join(', ')}.` : ''}
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
-LÄNGE: ungefähr 1400 Zeichen (mindestens 1100, höchstens 1800).
-
-AUFGABE:
-- Jedes Vorkommen eines der zu übenden Verben wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend nummeriert in Reihenfolge des Auftretens). An der Platzhalter-Stelle darf das konjugierte Verb NICHT im Klartext stehen – dort steht nur der Platzhalter.
-- Jedes zu übende Verb muss mindestens einmal vorkommen; kommt es mehrmals vor, ist JEDES Vorkommen ein eigener Platzhalter.
-- Jedes Verb an einer Lücke ist in GENAU EINER der zu übenden Zeitformen konjugiert (${tenseList}). BEIDE Zeitformen müssen im Text vorkommen. Verteile die Lücken sinnvoll auf beide Zeitformen.
-- Wähle einen erzählerischen Kontext, der die jeweilige Zeitform natürlich motiviert (z. B. Imparfait für Gewohnheiten/Beschreibungen in der Vergangenheit, Passé composé für einmalige abgeschlossene Handlungen, Futur simple für Zukünftiges, Subjonctif nach que/il faut que …).
-- VOLLSTÄNDIGE, SINNVOLLE SÄTZE – kein nacktes Fragment. Andere (nicht zu übende) Wörter bleiben normal im Klartext. Reflexive Verben behalten ihr Reflexivpronomen (se/s') sinnvoll an der Lücke.
+REGELN:
+- Länge dieses Kapitels: ca. 400–800 Zeichen, vollständige sinnvolle Sätze.
+- Verwende in diesem Kapitel 1 bis 5 der zu übenden Verben (so viele wie natürlich passen) als LÜCKEN.
+- Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext. Andere Wörter bleiben normal.
+- Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert; nutze BEIDE Zeitformen, wo es der Erzählkontext hergibt.
+- Decke möglichst VIELE verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles). Nutze ruhig Dialog/Ansprache, damit tu/vous/nous natürlich vorkommen.${neededPersons.length ? ` Baue in diesem Kapitel BESONDERS diese Personen ein: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
+- Wähle einen Kontext, der die Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
 
 Für jede Lücke gib an:
-- "n": die Nummer des Platzhalters
-- "answer": die EXAKTE konjugierte Verbform, wie sie an dieser Stelle in den Satz gehört (inkl. Hilfsverb bzw. Reflexivpronomen falls nötig, z. B. "ai mangé", "me suis levé")
-- "de": die deutsche Bedeutung des Verbs (aus der Liste oben)
-- "base": die Grundform/Infinitiv (wie in der Liste)
-- "tense": welche Zeitform hier verlangt ist – GENAU einer dieser Namen: ${tenseNames.map(n => `"${n}"`).join(', ')}
-- "note": kurze deutsche Erklärung der Form (z. B. "1. Person Singular Imparfait von manger")
+- "n": Nummer des Platzhalters
+- "answer": die EXAKTE konjugierte Verbform an dieser Stelle (inkl. Hilfsverb/Reflexivpronomen, z. B. "ai mangé", "me suis levé")
+- "de": deutsche Bedeutung des Verbs (aus der Liste)
+- "base": Grundform/Infinitiv (wie in der Liste)
+- "tense": GENAU einer dieser Namen: ${tenseNames.map(n => `"${n}"`).join(', ')}
+- "person": GENAU einer dieser Codes: "1sg","2sg","3sg","1pl","2pl","3pl"
+- "reason": kurze Begründung AUF DEUTSCH (maximal 2 Sätze), WARUM hier genau diese Zeitform steht (Signalwort/Kontext). Nenne dabei NIEMALS die Lösung / die konjugierte Verbform – nur die Zeitform und das "warum".
+- "note": ganz kurze deutsche Formangabe (z. B. "Imparfait, 1. Person Singular von manger") – diese wird erst NACH dem Ausfüllen gezeigt.
 
-WICHTIG: Verwende innerhalb der Texte einfache 'Anführungszeichen', niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown, ohne Backticks, ohne Text außerhalb des JSON.
+WICHTIG: Verwende in den Texten einfache 'Anführungszeichen', niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown, ohne Backticks, ohne Text außerhalb des JSON.
 
 Beispiel-Format:
-{"text":"Quand j'étais petit, je {{1}} souvent au parc. Un jour, j'{{2}} un vieux chien qui dormait sous un arbre.","blanks":[{"n":1,"answer":"jouais","de":"spielen","base":"jouer","tense":"Imparfait","note":"1. Person Singular Imparfait von jouer"},{"n":2,"answer":"ai vu","de":"sehen","base":"voir","tense":"Passé composé","note":"1. Person Singular Passé composé von voir"}]}
+{"title":"Le départ","text":"Ce matin-là, Léa {{1}} très tôt car elle {{2}} rejoindre ses amis.","blanks":[{"n":1,"answer":"s'est levée","de":"aufstehen","base":"se lever","tense":"Passé composé","person":"3sg","reason":"Einmalige, abgeschlossene Handlung an einem bestimmten Morgen – deshalb Passé composé.","note":"Passé composé, 3. Person Singular von se lever"},{"n":2,"answer":"voulait","de":"wollen","base":"vouloir","tense":"Imparfait","person":"3sg","reason":"Beschreibt einen andauernden Wunsch/Zustand im Hintergrund – deshalb Imparfait.","note":"Imparfait, 3. Person Singular von vouloir"}]}
 
-Jetzt deine Antwort:`
+Jetzt Kapitel ${chapterIndex}:`
 
   let parsed
-  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.6 })) }
-  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3500, temperature: 0.4 })) }
+  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.6 })) }
+  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.4 })) }
 
+  const title = String(parsed?.title || '').trim()
   const text = String(parsed?.text || '')
   const blanks = (Array.isArray(parsed?.blanks) ? parsed.blanks : [])
     .map(b => ({
@@ -302,12 +336,19 @@ Jetzt deine Antwort:`
       de: String(b.de || '').trim(),
       base: String(b.base || '').trim(),
       tense: String(b.tense || '').trim(),
+      person: String(b.person || '').trim(),
+      reason: String(b.reason || '').trim(),
       note: String(b.note || '').trim(),
     }))
     .filter(b => Number.isInteger(b.n) && b.answer.length > 0 && text.includes(`{{${b.n}}}`))
 
-  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiger Grammatik-Lückentext erzeugt')
-  return { text, blanks }
+  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiges Kapitel erzeugt')
+  return { title, text, blanks }
+}
+
+// Personencode → gut lesbares deutsches Label (für das Hinweis-Popup)
+export function personLabel(code) {
+  return PERSON_LABEL[code] || ''
 }
 
 export async function segmentTranscript(transcript, durationSec) {
