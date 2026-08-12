@@ -105,31 +105,31 @@ function HintPopover({ blank, onClose }) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(15,23,42,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        background: 'rgba(15,23,42,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="rounded-3xl border p-5 text-left"
-        style={{ width: 'min(440px, 92vw)', borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.30)' }}
+        className="rounded-3xl border p-7 text-left"
+        style={{ width: 'min(480px, 92vw)', borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--surface)', boxShadow: '0 24px 70px rgba(0,0,0,0.35)' }}
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="font-mono text-[12px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
             Warum diese Zeitform?
           </div>
-          <button onClick={onClose} className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm"
+          <button onClick={onClose} className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-base"
             style={{ backgroundColor: 'var(--surface-2)', color: 'var(--ink-soft)' }}>✕</button>
         </div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="gr-chip">{blank.tense || 'Zeitform'}</span>
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <span className="gr-chip" style={{ fontSize: 14, padding: '4px 12px' }}>{blank.tense || 'Zeitform'}</span>
           {blank.person && (
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
+            <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
               {personLabel(blank.person)}
             </span>
           )}
         </div>
-        <div className="text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>
+        <div className="text-[16px] leading-relaxed" style={{ color: 'var(--ink)' }}>
           {blank.reason || 'Diese Zeitform passt hier zum Kontext.'}
         </div>
       </div>
@@ -153,6 +153,7 @@ export default function GrammarPractice({ setView, setInSession }) {
   const [answers, setAnswers] = useState({})
   const [revealed, setRevealed] = useState({}) // pro Lücke: { [n]: true } nach Enter/Auswertung
   const [openHint, setOpenHint] = useState(null)
+  const [todoOpen, setTodoOpen] = useState(false)
 
   // Session-Kontext (für Story-Fortsetzung + Abdeckung)
   const [storyResolved, setStoryResolved] = useState('')
@@ -394,16 +395,14 @@ export default function GrammarPractice({ setView, setInSession }) {
     if (next) setTimeout(() => { const el = document.querySelector(`[data-blank="${next.n}"]`); if (el) el.focus() }, 0)
   }
 
-  // To-do-Liste dieses Kapitels: welche Verben (deutsch) und welche Personen kommen vor?
-  const runVerbs = []
-  if (run) {
-    const seen = new Set()
-    for (const b of run.blanks) {
-      const k = baseKey(b.base)
-      if (k && !seen.has(k)) { seen.add(k); runVerbs.push({ de: b.de, base: b.base }) }
-    }
-  }
-  const runPersons = new Set(run ? run.blanks.map(b => b.person).filter(Boolean) : [])
+  // Session-weite To-do-Liste: ALLE fälligen Verben + alle 6 Personen; Haken sobald
+  // irgendwann in der Session (inkl. aktuellem Kapitel) vorgekommen.
+  const runBaseKeys = run ? run.blanks.map(b => baseKey(b.base)).filter(Boolean) : []
+  const runPersonCodes = run ? run.blanks.map(b => b.person).filter(Boolean) : []
+  const sessBases = new Set([...coveredBases, ...runBaseKeys])
+  const sessPersons = new Set([...coveredPersons, ...runPersonCodes])
+  const verbsDone = verbs.filter(v => sessBases.has(baseKey(v.french))).length
+  const personsDone = ALL_PERSONS.filter(p => sessPersons.has(p)).length
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -514,39 +513,52 @@ export default function GrammarPractice({ setView, setInSession }) {
             })}
           </div>
 
-          {/* To-do-Liste: was dieses Kapitel abdeckt */}
-          <div className="mb-8 w-full rounded-2xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
-            <div className="mb-3 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
-              In diesem Kapitel abgedeckt
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Verben</div>
-                <ul className="flex flex-col gap-1.5">
-                  {runVerbs.map((v, i) => (
-                    <li key={i} className="flex items-baseline gap-2 text-sm" style={{ color: 'var(--ink)' }}>
-                      <span style={{ color: '#16a34a' }}>✓</span>
-                      <span className="font-medium">{v.de}</span>
-                      <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>({v.base})</span>
-                    </li>
-                  ))}
-                </ul>
+          {/* Session-Fortschritt: alle Verben + alle Personen, aufklappbar */}
+          <div className="mb-8 w-full rounded-2xl border" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
+            <button onClick={() => setTodoOpen(o => !o)} className="flex w-full items-center gap-3 px-5 py-4 text-left">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
+                Fortschritt der Session
+              </span>
+              <span className="ml-auto flex items-center gap-3 font-mono text-xs" style={{ color: 'var(--ink-faint)' }}>
+                <span>Verben {verbsDone}/{verbs.length}</span>
+                <span>Personen {personsDone}/{ALL_PERSONS.length}</span>
+                <span style={{ transform: todoOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▸</span>
+              </span>
+            </button>
+
+            {todoOpen && (
+              <div className="grid gap-5 px-5 pb-5 sm:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Verben (alle fälligen)</div>
+                  <ul className="flex flex-col gap-1.5">
+                    {verbs.map((v, i) => {
+                      const on = sessBases.has(baseKey(v.french))
+                      return (
+                        <li key={i} className="flex items-baseline gap-2 text-sm" style={{ color: on ? 'var(--ink)' : 'var(--ink-faint)' }}>
+                          <span style={{ color: on ? '#16a34a' : 'var(--line)' }}>{on ? '✓' : '○'}</span>
+                          <span className={on ? 'font-medium' : ''}>{v.german}</span>
+                          <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>({v.french})</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Personen</div>
+                  <ul className="flex flex-col gap-1.5">
+                    {ALL_PERSONS.map(code => {
+                      const on = sessPersons.has(code)
+                      return (
+                        <li key={code} className="flex items-center gap-2 text-sm" style={{ color: on ? 'var(--ink)' : 'var(--ink-faint)' }}>
+                          <span style={{ color: on ? '#16a34a' : 'var(--line)' }}>{on ? '✓' : '○'}</span>
+                          <span>{personLabel(code)}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
               </div>
-              <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Personen</div>
-                <ul className="flex flex-col gap-1.5">
-                  {ALL_PERSONS.map(code => {
-                    const on = runPersons.has(code)
-                    return (
-                      <li key={code} className="flex items-center gap-2 text-sm" style={{ color: on ? 'var(--ink)' : 'var(--ink-faint)' }}>
-                        <span style={{ color: on ? '#16a34a' : 'var(--line)' }}>{on ? '✓' : '○'}</span>
-                        <span>{personLabel(code)}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            </div>
+            )}
           </div>
 
           {!allRevealed ? (
