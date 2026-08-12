@@ -78,34 +78,43 @@ function FormTheory({ form }) {
   )
 }
 
-// Hinweis-Popup an einer Lücke: welche Zeitform + Person + Begründung (OHNE die Lösung).
+// Hinweis-Overlay zu einer Lücke: welche Zeitform + Person + Begründung (OHNE die Lösung).
+// Zentriertes Modal mit deckendem Hintergrund, damit die Erklärung immer gut lesbar ist.
 function HintPopover({ blank, onClose }) {
   return (
-    <>
-      {/* Klick außerhalb schließt */}
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(15,23,42,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
       <div
-        style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 50, width: 'min(280px, 78vw)',
-        }}
+        onClick={e => e.stopPropagation()}
+        className="rounded-3xl border p-5 text-left"
+        style={{ width: 'min(440px, 92vw)', borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.30)' }}
       >
-        <div className="rounded-2xl border p-3.5 text-left shadow-lg"
-          style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)', boxShadow: '0 8px 24px rgba(0,0,0,0.14)' }}>
-          <div className="mb-2 flex items-center gap-2">
-            <span className="gr-chip">{blank.tense || 'Zeitform'}</span>
-            {blank.person && (
-              <span className="font-mono text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
-                {personLabel(blank.person)}
-              </span>
-            )}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
+            Warum diese Zeitform?
           </div>
-          <div className="text-[13.5px] leading-relaxed" style={{ color: 'var(--ink)' }}>
-            {blank.reason || 'Diese Zeitform passt hier zum Kontext.'}
-          </div>
+          <button onClick={onClose} className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm"
+            style={{ backgroundColor: 'var(--surface-2)', color: 'var(--ink-soft)' }}>✕</button>
+        </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="gr-chip">{blank.tense || 'Zeitform'}</span>
+          {blank.person && (
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
+              {personLabel(blank.person)}
+            </span>
+          )}
+        </div>
+        <div className="text-[15px] leading-relaxed" style={{ color: 'var(--ink)' }}>
+          {blank.reason || 'Diese Zeitform passt hier zum Kontext.'}
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
