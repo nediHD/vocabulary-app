@@ -123,7 +123,7 @@ export default function GrammarPractice({ setView, setInSession }) {
   const [pending, setPending] = useState(null) // { index, ctx } für Retry
 
   const [answers, setAnswers] = useState({})
-  const [graded, setGraded] = useState(false)
+  const [revealed, setRevealed] = useState({}) // pro Lücke: { [n]: true } nach Enter/Auswertung
   const [openHint, setOpenHint] = useState(null)
 
   // Session-Kontext (für Story-Fortsetzung + Abdeckung)
@@ -183,7 +183,7 @@ export default function GrammarPractice({ setView, setInSession }) {
       })
       setRun(result)
       setAnswers({})
-      setGraded(false)
+      setRevealed({})
       setOpenHint(null)
       setPhase('run')
     } catch (e) {
@@ -333,6 +333,15 @@ export default function GrammarPractice({ setView, setInSession }) {
 
   // ---------- Kapitel (Lückentext) ----------
   const correctCount = run ? run.blanks.filter(b => norm(answers[b.n]) === norm(b.answer)).length : 0
+  const allRevealed = run ? run.blanks.every(b => revealed[b.n]) : false
+
+  const revealBlank = (n) => setRevealed(prev => ({ ...prev, [n]: true }))
+  const revealAll = () => { setOpenHint(null); setRevealed(Object.fromEntries(run.blanks.map(b => [b.n, true]))) }
+  const focusNextBlank = (n) => {
+    const idx = run.blanks.findIndex(b => b.n === n)
+    const next = run.blanks.slice(idx + 1).find(b => !revealed[b.n])
+    if (next) setTimeout(() => { const el = document.querySelector(`[data-blank="${next.n}"]`); if (el) el.focus() }, 0)
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -374,6 +383,7 @@ export default function GrammarPractice({ setView, setInSession }) {
 
           <p className="mb-5 text-center text-sm" style={{ color: 'var(--ink-soft)' }}>
             Fülle die Lücken mit der richtigen Verbform. In Klammern steht das deutsche Wort.
+            Drücke <span style={{ color: 'var(--blue)', fontWeight: 600 }}>Enter</span> für das Ergebnis dieser Lücke.
             Tippe auf <span style={{ color: 'var(--blue)', fontWeight: 600 }}>ⓘ</span>, um Zeitform &amp; Begründung zu sehen.
           </p>
 
@@ -388,9 +398,10 @@ export default function GrammarPractice({ setView, setInSession }) {
 
               const val = answers[n] || ''
               const correct = norm(val) === norm(blank.answer)
+              const isRev = !!revealed[n]
               let borderColor = 'var(--blue)'
               let bg = 'white'
-              if (graded) {
+              if (isRev) {
                 borderColor = correct ? '#16a34a' : '#ef4444'
                 bg = correct ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)'
               }
@@ -400,10 +411,16 @@ export default function GrammarPractice({ setView, setInSession }) {
                   <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
                     <input
                       type="text"
+                      data-blank={n}
                       value={val}
-                      disabled={graded}
+                      disabled={isRev}
                       onChange={e => setAnswers(prev => ({ ...prev, [n]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (!isRev) { revealBlank(n); focusNextBlank(n) }
+                        }
+                      }}
                       size={Math.max(6, blank.answer.length + 2)}
                       className="rounded-lg border-2 px-2 py-1 text-center font-sans text-base outline-none"
                       style={{ borderColor, backgroundColor: bg, color: 'var(--ink)' }}
@@ -422,10 +439,12 @@ export default function GrammarPractice({ setView, setInSession }) {
 
                   {openHint === n && <HintPopover blank={blank} onClose={() => setOpenHint(null)} />}
 
-                  {graded && !correct && (
-                    <span className="mt-0.5 text-xs font-semibold" style={{ color: '#16a34a' }}>✓ {blank.answer}</span>
+                  {isRev && (
+                    <span className="mt-0.5 text-xs font-semibold" style={{ color: correct ? '#16a34a' : '#16a34a' }}>
+                      {correct ? '✓ richtig' : `✓ ${blank.answer}`}
+                    </span>
                   )}
-                  {graded && blank.note && (
+                  {isRev && blank.note && (
                     <span className="mt-0.5 max-w-[240px] text-xs italic" style={{ color: 'var(--blue-dark)' }}>ⓘ {blank.note}</span>
                   )}
                 </span>
@@ -433,13 +452,13 @@ export default function GrammarPractice({ setView, setInSession }) {
             })}
           </div>
 
-          {!graded ? (
-            <button onClick={() => { setOpenHint(null); setGraded(true) }}
+          {!allRevealed ? (
+            <button onClick={revealAll}
               className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
               style={{ backgroundColor: 'var(--blue)' }}
               onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
               onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}>
-              Fertig
+              Alle auflösen
             </button>
           ) : (
             <div className="w-full max-w-sm">
