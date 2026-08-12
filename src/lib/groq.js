@@ -301,7 +301,7 @@ ZU ÜBENDE ZEITFORMEN: ${tenseList}
 REGELN:
 - Länge dieses Kapitels: ca. 700–1200 Zeichen, in natürlich fließenden, vollständigen Sätzen. Die Geschichte darf ruhig ausführlich sein.
 - PFLICHT: JEDES oben geforderte Verb kommt in diesem Kapitel mindestens einmal als Lücke vor, konjugiert in EINER der 2 Zeitformen (${tenseList}). Gestalte Kontext und Person so, dass es natürlich klingt.
-- NUR die geforderten (und optional die zusätzlichen) Verben werden zu LÜCKEN. ALLE anderen Verben im Text bleiben normaler Klartext in beliebiger Form – sie werden NICHT zu Lücken und müssen NICHT in den Zielzeitformen stehen.
+- NUR die oben geforderten (und optional die zusätzlichen) Verben werden zu LÜCKEN. Das gilt AUSNAHMSLOS: häufige Verben wie inviter, mettre, boire, aller, être, avoir, commencer usw. bleiben normaler Klartext und werden NIEMALS zu einer Lücke, es sei denn, sie stehen ausdrücklich in der geforderten Liste oben. Erzeuge KEINE Lücke für ein Verb, das nicht oben gelistet ist.
 - NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
 - Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
 - Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert.

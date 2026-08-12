@@ -60,6 +60,19 @@ function resolveText(text, blanks) {
   })
 }
 
+// Erzwingt: NUR erlaubte (DB-)Verben bleiben Lücken. Lücken für Verben, die nicht in
+// der DB-Liste stehen, werden entfernt – ihr Platzhalter wird durch die richtige Form
+// ersetzt, sodass der Text normal weiterläuft. (Das Modell blankt sonst zu viele Verben.)
+function sanitizeRun(result, allowedKeys) {
+  let text = String(result?.text || '')
+  const kept = []
+  for (const b of (result?.blanks || [])) {
+    if (allowedKeys.has(baseKey(b.base))) kept.push(b)
+    else text = text.split(`{{${b.n}}}`).join(b.answer) // Nicht-DB-Verb → Klartext
+  }
+  return { ...result, text, blanks: kept }
+}
+
 // Eine Zeitform mit aufklappbarer Theorie (nutzt denselben Renderer wie „Grammatik nachschlagen").
 function FormTheory({ form }) {
   const [open, setOpen] = useState(false)
@@ -217,7 +230,9 @@ export default function GrammarPractice({ setView, setInSession }) {
         storySoFar: ctx.story,
         neededPersons: neededP,
       })
-      setRun(result)
+      // Nur DB-Verben als Lücken zulassen (gesamter DB-Pool = erlaubt).
+      const allowedKeys = new Set(verbs.map(v => baseKey(v.french)))
+      setRun(sanitizeRun(result, allowedKeys))
       setAnswers({})
       setRevealed({})
       setOpenHint(null)
