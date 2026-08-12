@@ -299,12 +299,14 @@ ${unused.length ? `BEVORZUGE in diesem Kapitel diese noch nicht geübten Verben:
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
 REGELN:
-- Länge dieses Kapitels: ca. 400–800 Zeichen, vollständige sinnvolle Sätze.
-- Verwende in diesem Kapitel 1 bis 5 der zu übenden Verben (so viele wie natürlich passen) als LÜCKEN.
-- Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext. Andere Wörter bleiben normal.
-- Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert; nutze BEIDE Zeitformen, wo es der Erzählkontext hergibt.
-- Decke möglichst VIELE verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles). Nutze ruhig Dialog/Ansprache, damit tu/vous/nous natürlich vorkommen.${neededPersons.length ? ` Baue in diesem Kapitel BESONDERS diese Personen ein: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
-- Wähle einen Kontext, der die Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
+- Länge dieses Kapitels: ca. 700–1200 Zeichen, in natürlich fließenden, vollständigen Sätzen. Die Geschichte darf ruhig ausführlich sein.
+- NUR die oben gelisteten zu übenden Verben werden zu LÜCKEN. ALLE anderen Verben im Text bleiben normaler Klartext in beliebiger Form – sie werden NICHT zu Lücken und müssen NICHT in den Zielzeitformen stehen.
+- Zwinge nichts: Ein zu übendes Verb wird nur DORT zur Lücke, wo eine der beiden Zielzeitformen (${tenseList}) natürlich in die Geschichte passt. Es müssen NICHT alle gelisteten Verben vorkommen – lieber weniger, dafür natürlich passend.
+- Verwende 1 bis 5 Lücken in diesem Kapitel. NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
+- Jede Lücke ersetzt genau EIN konjugiertes (zu übendes) Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
+- Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert.
+- Wo es natürlich passt, decke verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles); nutze ruhig Dialog/Ansprache. Aber NUR wenn es natürlich klingt – erzwinge keine unpassende Person.${neededPersons.length ? ` Versuche – nur wenn es natürlich passt – diese Personen einzubauen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
+- Wähle einen Kontext, der die jeweilige Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
 
 Für jede Lücke gib an:
 - "n": Nummer des Platzhalters
@@ -324,8 +326,8 @@ Beispiel-Format:
 Jetzt Kapitel ${chapterIndex}:`
 
   let parsed
-  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.6 })) }
-  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 2600, temperature: 0.4 })) }
+  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.6 })) }
+  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.4 })) }
 
   const title = String(parsed?.title || '').trim()
   const text = String(parsed?.text || '')
