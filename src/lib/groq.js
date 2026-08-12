@@ -305,29 +305,33 @@ REGELN:
 - NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
 - Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
 - Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert.
+- KORREKTHEIT (SEHR WICHTIG): "answer" ist die grammatikalisch KORREKTE Konjugation von GENAU "base" in "tense" und "person" – NIEMALS ein anderes Verb (z. B. NICHT "allait" von aller, wenn das Verb "ballotter" ist). "answer", "base", "tense", "person" und "note" müssen zu 100 % zueinander passen. Prüfe jede Form, bevor du sie ausgibst.
+- Die "answer" enthält NUR den konjugierten Verbteil. Bei zusammengesetzten Zeiten (Passé composé, Plus-que-parfait, Futur antérieur, Conditionnel passé, Subjonctif passé) stehen Hilfsverb + Partizip ZUSAMMENHÄNGEND (z. B. "ai mangé", "était tortillée"). Bei Futur proche ist die "answer" die VOLLSTÄNDIGE Form "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter", "allons partir") – niemals nur "vais".
+- KEINE Adverbien/kleinen Wörter (déjà, souvent, toujours, vraiment, bien, ne, pas …) innerhalb der "answer" oder zwischen Hilfsverb und Partizip. Solche Wörter stehen als Klartext AUSSERHALB der Lücke. Formuliere den Satz so, dass die Verbform nicht von einem Adverb unterbrochen wird.
+- Vorangestellte Pronomen bleiben Klartext VOR der Lücke und gehören NICHT in die "answer": Reflexivpronomen (se, s', me, m', te, t', nous, vous) und Objektpronomen (le, la, les, l', lui, leur). Beispiel: Text "Pierre m'{{1}}" mit answer "invita"; Text "elle s'{{2}}" mit answer "était tortillée". Die "answer" beginnt beim konjugierten (Hilfs-)Verb.
 - Wo es natürlich passt, decke verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles); nutze ruhig Dialog/Ansprache. Aber NUR wenn es natürlich klingt – erzwinge keine unpassende Person.${neededPersons.length ? ` Versuche – nur wenn es natürlich passt – diese Personen einzubauen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
 - Wähle einen Kontext, der die jeweilige Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
 
 Für jede Lücke gib an:
 - "n": Nummer des Platzhalters
-- "answer": die EXAKTE konjugierte Verbform an dieser Stelle (inkl. Hilfsverb/Reflexivpronomen, z. B. "ai mangé", "me suis levé")
+- "answer": die KORREKTE konjugierte Verbform an dieser Stelle – NUR der Verbteil, OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà …). Zusammengesetzte Zeiten: Hilfsverb + Partizip zusammen (z. B. "était tortillée"); Futur proche: "aller + Infinitiv" (z. B. "vais ballotter").
 - "de": deutsche Bedeutung des Verbs (aus der Liste)
-- "base": Grundform/Infinitiv (wie in der Liste)
+- "base": Grundform/Infinitiv (wie in der Liste) – GENAU dieses Verb wird konjugiert
 - "tense": GENAU einer dieser Namen: ${tenseNames.map(n => `"${n}"`).join(', ')}
 - "person": GENAU einer dieser Codes: "1sg","2sg","3sg","1pl","2pl","3pl"
-- "reason": kurze Begründung AUF DEUTSCH (maximal 2 Sätze), WARUM hier genau diese Zeitform steht (Signalwort/Kontext). Nenne dabei NIEMALS die Lösung / die konjugierte Verbform – nur die Zeitform und das "warum".
+- "reason": eine INDIVIDUELLE, konkrete Begründung AUF DEUTSCH (1–2 Sätze), bezogen auf GENAU DIESEN Satz: welches Signalwort / welcher Kontext hier diese Zeitform verlangt (z. B. "nach 'il faut que' steht der Subjonctif", "'quand' + einmalige abgeschlossene Handlung → Passé composé", "'demain' → nahe Zukunft, Futur proche"). Formuliere JEDE Begründung anders, KEINE wiederholten Standardsätze. Nenne NIEMALS die konjugierte Lösung.
 - "note": ganz kurze deutsche Formangabe (z. B. "Imparfait, 1. Person Singular von manger") – diese wird erst NACH dem Ausfüllen gezeigt.
 
 WICHTIG: Verwende in den Texten einfache 'Anführungszeichen', niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown, ohne Backticks, ohne Text außerhalb des JSON.
 
-Beispiel-Format:
-{"title":"Le départ","text":"Ce matin-là, Léa {{1}} très tôt car elle {{2}} rejoindre ses amis.","blanks":[{"n":1,"answer":"s'est levée","de":"aufstehen","base":"se lever","tense":"Passé composé","person":"3sg","reason":"Einmalige, abgeschlossene Handlung an einem bestimmten Morgen – deshalb Passé composé.","note":"Passé composé, 3. Person Singular von se lever"},{"n":2,"answer":"voulait","de":"wollen","base":"vouloir","tense":"Imparfait","person":"3sg","reason":"Beschreibt einen andauernden Wunsch/Zustand im Hintergrund – deshalb Imparfait.","note":"Imparfait, 3. Person Singular von vouloir"}]}
+Beispiel-Format (beachte: Pronomen 's''/'m'' stehen im Text VOR der Lücke, NICHT in "answer"; Futur proche als ganze Form):
+{"title":"La rencontre","text":"Quand je suis arrivé à Paris, une jeune femme s'{{1}} nerveusement sur son siège, puis elle m'{{2}} à prendre un café. Demain, nous {{3}} le tour du quartier ensemble.","blanks":[{"n":1,"answer":"était tortillée","de":"sich winden","base":"se tortiller","tense":"Plus-que-parfait","person":"3sg","reason":"Ihr Zappeln lag schon VOR meiner Ankunft abgeschlossen vor – Vorzeitigkeit in der Vergangenheit, deshalb Plus-que-parfait.","note":"Plus-que-parfait, 3. Person Singular von se tortiller"},{"n":2,"answer":"invita","de":"einladen","base":"inviter","tense":"Passé simple","person":"3sg","reason":"Einmalige, abgeschlossene Handlung im literarischen Erzählton – deshalb Passé simple.","note":"Passé simple, 3. Person Singular von inviter"},{"n":3,"answer":"allons faire","de":"machen","base":"faire","tense":"Futur proche","person":"1pl","reason":"'Demain' kündigt eine nahe, geplante Zukunft an – deshalb Futur proche mit aller + Infinitiv.","note":"Futur proche, 1. Person Plural von faire"}]}
 
 Jetzt Kapitel ${chapterIndex}:`
 
   let parsed
-  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.6 })) }
-  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.4 })) }
+  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.45 })) }
+  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.35 })) }
 
   const title = String(parsed?.title || '').trim()
   const text = String(parsed?.text || '')
