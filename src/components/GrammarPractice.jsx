@@ -394,6 +394,17 @@ export default function GrammarPractice({ setView, setInSession }) {
     if (next) setTimeout(() => { const el = document.querySelector(`[data-blank="${next.n}"]`); if (el) el.focus() }, 0)
   }
 
+  // To-do-Liste dieses Kapitels: welche Verben (deutsch) und welche Personen kommen vor?
+  const runVerbs = []
+  if (run) {
+    const seen = new Set()
+    for (const b of run.blanks) {
+      const k = baseKey(b.base)
+      if (k && !seen.has(k)) { seen.add(k); runVerbs.push({ de: b.de, base: b.base }) }
+    }
+  }
+  const runPersons = new Set(run ? run.blanks.map(b => b.person).filter(Boolean) : [])
+
   return (
     <div className="mx-auto max-w-2xl">
       {/* Kopf mit Fortschritts-Pills */}
@@ -501,6 +512,41 @@ export default function GrammarPractice({ setView, setInSession }) {
                 </span>
               )
             })}
+          </div>
+
+          {/* To-do-Liste: was dieses Kapitel abdeckt */}
+          <div className="mb-8 w-full rounded-2xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
+            <div className="mb-3 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>
+              In diesem Kapitel abgedeckt
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Verben</div>
+                <ul className="flex flex-col gap-1.5">
+                  {runVerbs.map((v, i) => (
+                    <li key={i} className="flex items-baseline gap-2 text-sm" style={{ color: 'var(--ink)' }}>
+                      <span style={{ color: '#16a34a' }}>✓</span>
+                      <span className="font-medium">{v.de}</span>
+                      <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>({v.base})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Personen</div>
+                <ul className="flex flex-col gap-1.5">
+                  {ALL_PERSONS.map(code => {
+                    const on = runPersons.has(code)
+                    return (
+                      <li key={code} className="flex items-center gap-2 text-sm" style={{ color: on ? 'var(--ink)' : 'var(--ink-faint)' }}>
+                        <span style={{ color: on ? '#16a34a' : 'var(--line)' }}>{on ? '✓' : '○'}</span>
+                        <span>{personLabel(code)}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </div>
           </div>
 
           {!allRevealed ? (
