@@ -367,9 +367,33 @@ Antworte NUR mit gültigem JSON ohne Markdown:
       t._reason = String(ans.reason || '').trim()
       t._note = String(ans.note || '').trim()
     })
+
+    // ---------- DURCHLAUF 3: unabhängige Verifikation/Korrektur der Formen ----------
+    const verifyList = flat.map((t, i) => {
+      const cur = parts[t.pi].targets[t.ti]._answer || ''
+      return `${i + 1}. Verb (Infinitiv) "${t.base}" | Zeitform "${t.tense}" | Person "${PERSON_LABEL[t.person] || t.person}" | vorgeschlagene Form: "${cur}"`
+    }).join('\n')
+
+    const promptV = `Du bist ein strenger Französisch-Grammatik-Prüfer. Prüfe für JEDEN Eintrag, ob die vorgeschlagene Form die KORREKTE Konjugation von GENAU diesem Verb (base) in der angegebenen Zeitform + Person ist. Konjugiere niemals ein anderes Verb.
+
+${verifyList}
+
+Gib pro Eintrag die KORREKTE Form zurück – ist die vorgeschlagene bereits richtig, gib sie unverändert zurück; ist sie falsch, gib die korrigierte Form. NUR der Verbteil (zusammengesetzte Zeiten: Hilfsverb+Partizip; Futur proche: aller+Infinitiv), OHNE Pronomen (se/s'/m' …), OHNE Adverbien.
+
+Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wie oben:
+{"checked":["Form 1","Form 2","..."]}`
+
+    try {
+      const v = parseGroqJSON(await callGroq(promptV, { maxTokens: 2000, temperature: 0.1 }))
+      const checked = Array.isArray(v?.checked) ? v.checked : []
+      flat.forEach((f, k) => {
+        const corr = String(checked[k] || '').trim()
+        if (corr) parts[f.pi].targets[f.ti]._answer = corr
+      })
+    } catch { /* Verifikation optional: bei Fehler bleiben die Formen aus Durchlauf 2 */ }
   }
 
-  // ---------- DURCHLAUF 3 (Code): Lücken pro Abschnitt einsetzen ----------
+  // ---------- DURCHLAUF 4 (Code): Lücken pro Abschnitt einsetzen ----------
   const runs = parts.map(p => {
     let text = p.text
     const order = p.targets.map((_, ti) => ti).sort((x, y) => p.targets[y].surface.length - p.targets[x].surface.length)
