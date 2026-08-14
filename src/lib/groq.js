@@ -268,123 +268,134 @@ const PERSON_LABEL = {
   '3pl': '3. Person Plural (ils/elles)',
 }
 
-export async function generateGrammarStoryRun(opts) {
+// Reflexiv-robuster Schlüssel für Infinitiv-Vergleich (se/s' ignorieren).
+function grBaseKey(s) {
+  return (s || '').toString().toLowerCase().trim().replace(/^s['’]?\s*/, '').replace(/^se\s+/, '').trim()
+}
+
+// Erzeugt die GESAMTE Session-Geschichte auf einmal (Durchlauf 1), konjugiert dann
+// alle Ziel-Verben in einem zweiten Durchlauf, und baut daraus die Runs (Abschnitte).
+// opts: { verbs:[{french,german}], forms:[{name}], parts:number }
+// return: { title, runs:[{ title, text, blanks:[{n,answer,de,base,tense,person,reason,note}] }] }
+export async function generateGrammarStory(opts) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
-  const {
-    verbs = [], reuseVerbs = [], forms = [], chapterIndex = 1, totalChapters = 7,
-    storySoFar = '', neededPersons = [],
-  } = opts || {}
-
+  const { verbs = [], forms = [], parts: numParts = 7 } = opts || {}
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
-  const reuseList = reuseVerbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
   const tenseList = tenseNames.join(' UND ')
-  const isFirst = chapterIndex <= 1 || !storySoFar
-  const isLast = chapterIndex >= totalChapters
-  const recap = capText(String(storySoFar || ''), 1500)
+  const allowed = new Set(verbs.map(v => grBaseKey(v.french)))
 
-  // ---------- DURCHLAUF 1: Geschichte schreiben + Ziel-Verben markieren ----------
-  const prompt1 = `Du schreibst KAPITEL ${chapterIndex} von ${totalChapters} einer fortlaufenden französischen Geschichte. Die Kapitel ergeben ZUSAMMEN eine einzige, sich entwickelnde Geschichte.
+  // ---------- DURCHLAUF 1: GANZE Geschichte in ${numParts} Abschnitten ----------
+  const prompt1 = `Schreibe EINE zusammenhängende französische Geschichte in GENAU ${numParts} Abschnitten (Teil 1 bis ${numParts}). Die Abschnitte bilden EINE durchgehende Geschichte mit Anfang, Entwicklung und Ende – sie bauen aufeinander auf und WIEDERHOLEN sich NICHT (keine Szene, kein Satz und kein Motiv doppelt). Jeder Abschnitt setzt den vorherigen fort.
 
-${isFirst
-  ? 'Dies ist das ERSTE Kapitel – beginne die Geschichte (führe Figur/Ort/Situation ein).'
-  : `BISHERIGE GESCHICHTE (Kontext, führe sie natürlich WEITER – nicht neu anfangen, nicht wiederholen):\n"""\n${recap}\n"""`}
-${isLast ? 'Dies ist das LETZTE Kapitel – bringe die Geschichte zu einem runden Abschluss.' : ''}
-
-ZU ÜBENDE VERBEN – diese MÜSSEN in diesem Kapitel ALLE vorkommen (Grundform/Infinitiv): ${verbList}
-${reuseList ? `Optional darfst du zusätzlich diese bereits geübten Verben verwenden: ${reuseList}.` : ''}
+ZU ÜBENDE VERBEN – jedes muss über die GESAMTE Geschichte mindestens einmal vorkommen (Grundform/Infinitiv): ${verbList}
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
-Schreibe das Kapitel als NORMALEN französischen Text – NOCH KEINE Lücken, KEINE Platzhalter, alle Verben ganz normal ausgeschrieben.
 REGELN:
-- Länge ca. 700–1200 Zeichen, natürliche vollständige Sätze, Geschichte fortsetzen.
-- Jedes oben geforderte Verb kommt mindestens einmal vor, konjugiert in EINER der 2 Zeitformen (${tenseList}), passend zum Kontext.
-- Nicht jeder Satz braucht ein Ziel-Verb; baue verbindende Erzählsätze ein.
-- Wähle Kontexte, die die Zeitform motivieren (Imparfait: Gewohnheit/Beschreibung; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).${neededPersons.length ? ` Verwende – wo natürlich – auch diese Personen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
+- Jeder Abschnitt: nur EIN PAAR Sätze (ca. 2–4 Sätze).
+- Verteile die zu übenden Verben über die Abschnitte, sodass am Ende ALLE mindestens einmal vorkommen. Nicht jeder Satz braucht ein Ziel-Verb; baue auch verbindende Erzählsätze ein.
+- Jedes Vorkommen eines zu übenden Verbs ist in EINER der 2 Zeitformen (${tenseList}) konjugiert.
+- Decke über die ganze Geschichte möglichst viele grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nutze auch Dialog/Ansprache.
+- Wähle Kontexte, die die Zeitform motivieren (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
+- Schreibe NORMALEN Text – KEINE Platzhalter, KEINE Lücken.
 
-Gib zusätzlich für JEDES Vorkommen eines der ZU ÜBENDEN Verben (nur diese, keine anderen) ein "target"-Objekt zurück mit:
+Gib für JEDEN Abschnitt "text" (die Sätze) und "targets" (nur für die ZU ÜBENDEN Verben, die in diesem Abschnitt vorkommen) mit:
 - "base": Infinitiv (aus der Liste)
 - "de": deutsche Bedeutung (aus der Liste)
 - "tense": genau eine der 2 Zeitformen (${tenseNames.map(n => `"${n}"`).join(', ')})
-- "person": Code aus dem Subjekt des Satzes – "1sg","2sg","3sg","1pl","2pl","3pl"
-- "verb_surface": der EXAKTE, zusammenhängende konjugierte Verbteil, GENAU so wie er im "text" steht (muss als Teilstring im text vorkommen). NUR das Verb: bei zusammengesetzten Zeiten Hilfsverb+Partizip zusammen (z. B. "était tortillée"), bei Futur proche "aller+Infinitiv" (z. B. "vais ballotter"). OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà, souvent …). Setze KEIN Adverb zwischen Hilfsverb und Partizip, damit dieser Teil zusammenhängend bleibt.
+- "person": Code aus dem Subjekt – "1sg","2sg","3sg","1pl","2pl","3pl"
+- "verb_surface": der EXAKTE, zusammenhängende konjugierte Verbteil, GENAU so wie er im "text" dieses Abschnitts steht (muss als Teilstring vorkommen). NUR das Verb: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"), Futur proche = "aller+Infinitiv" (z. B. "vais ballotter"). OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà, souvent …). Setze KEIN Adverb zwischen Hilfsverb und Partizip.
 - "sentence": der Satz, in dem das Verb steht.
 
 WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR mit gültigem JSON ohne Markdown:
-{"title":"...","text":"...","targets":[{"base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","verb_surface":"se tortillait","sentence":"..."}]}
-
-Jetzt Kapitel ${chapterIndex}:`
+{"title":"...","parts":[{"text":"...","targets":[{"base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","verb_surface":"se tortillait","sentence":"..."}]}]}`
 
   let s
-  try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 2600, temperature: 0.5 })) }
-  catch { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 2600, temperature: 0.35 })) }
+  try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 5000, temperature: 0.6 })) }
+  catch { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 5000, temperature: 0.4 })) }
 
   const title = String(s?.title || '').trim()
-  let text = String(s?.text || '')
-  const targets = (Array.isArray(s?.targets) ? s.targets : [])
-    .map(t => ({
-      base: String(t.base || '').trim(),
-      de: String(t.de || '').trim(),
-      tense: String(t.tense || '').trim(),
-      person: String(t.person || '').trim(),
-      surface: String(t.verb_surface || '').trim(),
-      sentence: String(t.sentence || '').trim(),
+  const parts = (Array.isArray(s?.parts) ? s.parts : [])
+    .map(p => ({
+      text: String(p?.text || ''),
+      targets: (Array.isArray(p?.targets) ? p.targets : [])
+        .map(t => ({
+          base: String(t.base || '').trim(),
+          de: String(t.de || '').trim(),
+          tense: String(t.tense || '').trim(),
+          person: String(t.person || '').trim(),
+          surface: String(t.verb_surface || '').trim(),
+          sentence: String(t.sentence || '').trim(),
+        }))
+        .filter(t => t.base && t.surface && allowed.has(grBaseKey(t.base))),
     }))
-    .filter(t => t.base && t.surface && text.includes(t.surface))
+    .filter(p => p.text)
+  if (parts.length === 0) throw new Error('Groq: Keine Geschichte erzeugt')
 
-  if (!text || targets.length === 0) throw new Error('Groq: Kein gültiges Kapitel erzeugt')
+  // ---------- DURCHLAUF 2: alle Ziel-Verben korrekt konjugieren + Begründung ----------
+  const flat = []
+  parts.forEach((p, pi) => p.targets.forEach((t, ti) => { if (p.text.includes(t.surface)) flat.push({ pi, ti, ...t }) }))
 
-  // ---------- DURCHLAUF 2: Formen korrekt konjugieren + individuelle Begründung ----------
-  const list = targets.map((t, i) =>
-    `${i + 1}. Verb (Infinitiv): "${t.base}" | Zeitform: "${t.tense}" | Person: "${PERSON_LABEL[t.person] || t.person}" | Kontextsatz: "${t.sentence}"`
-  ).join('\n')
+  if (flat.length) {
+    const listStr = flat.map((t, i) =>
+      `${i + 1}. Verb (Infinitiv): "${t.base}" | Zeitform: "${t.tense}" | Person: "${PERSON_LABEL[t.person] || t.person}" | Kontextsatz: "${t.sentence}"`
+    ).join('\n')
 
-  const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
+    const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
 
-${list}
+${listStr}
 
 Für jeden Eintrag (gleiche Reihenfolge, gleiche Anzahl) gib zurück:
 - "answer": die grammatikalisch korrekte französische Form von base in der angegebenen Zeitform + Person. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"); Futur proche = "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m' …), OHNE Adverbien.
 - "reason": INDIVIDUELLE deutsche Begründung (1–2 Sätze), warum im Kontextsatz genau diese Zeitform passt (konkretes Signalwort/Kontext). Jede Begründung anders formulieren, keine Standardsätze. Nenne NICHT die Lösung.
-- "note": kurze deutsche Formangabe, z. B. "Imparfait, 1. Person Singular von ${targets[0]?.base || 'manger'}".
+- "note": kurze deutsche Formangabe, z. B. "Imparfait, 1. Person Singular von manger".
 
 Antworte NUR mit gültigem JSON ohne Markdown:
 {"answers":[{"answer":"...","reason":"...","note":"..."}]}`
 
-  let a
-  try { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2200, temperature: 0.25 })) }
-  catch { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2200, temperature: 0.2 })) }
-  const answers = Array.isArray(a?.answers) ? a.answers : []
-
-  // ---------- DURCHLAUF 3 (Code): Lücken einsetzen ----------
-  // Längste verb_surface zuerst ersetzen, damit kein Teilstring-Konflikt entsteht.
-  const order = targets.map((_, i) => i).sort((x, y) => targets[y].surface.length - targets[x].surface.length)
-  const blanks = []
-  let n = 0
-  for (const i of order) {
-    const t = targets[i]
-    if (!text.includes(t.surface)) continue
-    const ans = answers[i] || {}
-    const answer = (String(ans.answer || '').trim() || t.surface)
-    n += 1
-    text = text.replace(t.surface, `{{${n}}}`)
-    blanks.push({
-      n,
-      answer,
-      de: t.de,
-      base: t.base,
-      tense: t.tense,
-      person: t.person,
-      reason: String(ans.reason || '').trim(),
-      note: String(ans.note || '').trim() || `${t.tense}, ${PERSON_LABEL[t.person] || ''} von ${t.base}`,
+    let a
+    try { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.25 })) }
+    catch { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.2 })) }
+    const answers = Array.isArray(a?.answers) ? a.answers : []
+    flat.forEach((f, k) => {
+      const ans = answers[k] || {}
+      const t = parts[f.pi].targets[f.ti]
+      t._answer = String(ans.answer || '').trim()
+      t._reason = String(ans.reason || '').trim()
+      t._note = String(ans.note || '').trim()
     })
   }
 
-  if (blanks.length === 0) throw new Error('Groq: Keine Lücken erzeugt')
-  return { title, text, blanks }
+  // ---------- DURCHLAUF 3 (Code): Lücken pro Abschnitt einsetzen ----------
+  const runs = parts.map(p => {
+    let text = p.text
+    const order = p.targets.map((_, ti) => ti).sort((x, y) => p.targets[y].surface.length - p.targets[x].surface.length)
+    const blanks = []
+    let n = 0
+    for (const ti of order) {
+      const t = p.targets[ti]
+      if (!text.includes(t.surface)) continue
+      n += 1
+      text = text.replace(t.surface, `{{${n}}}`)
+      blanks.push({
+        n,
+        answer: t._answer || t.surface,
+        de: t.de,
+        base: t.base,
+        tense: t.tense,
+        person: t.person,
+        reason: t._reason || '',
+        note: t._note || `${t.tense}, ${PERSON_LABEL[t.person] || ''} von ${t.base}`,
+      })
+    }
+    return { title, text, blanks }
+  }).filter(r => r.text)
+
+  if (runs.length === 0) throw new Error('Groq: Keine Runs erzeugt')
+  return { title, runs }
 }
 
 // Personencode → gut lesbares deutsches Label (für das Hinweis-Popup)
