@@ -15,7 +15,7 @@ function verbForms() {
   for (const g of sec.groups) {
     if (g.id !== 'zeiten-indikativ' && g.id !== 'modi') continue
     for (const t of g.topics) {
-      if (t.style === 'form') out.push({ key: `${sec.id}/${g.id}/${t.id}`, name: t.name })
+      if (t.style === 'form') out.push({ key: `${sec.id}/${g.id}/${t.id}`, id: t.id, name: t.name })
     }
   }
   return out
@@ -64,6 +64,108 @@ function FormTheory({ form }) {
           {loading
             ? <div className="rounded-2xl border p-6 text-center" style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-soft)' }}>Lädt…</div>
             : <Explanation data={data} text={text} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const SUBJ = { '1sg': 'je', '2sg': 'tu', '3sg': 'il/elle', '1pl': 'nous', '2pl': 'vous', '3pl': 'ils/elles' }
+const PERSON_ORDER = ['1sg', '2sg', '3sg', '1pl', '2pl', '3pl']
+
+// Hebt die Endung (letzte Zeichen) farbig hervor, wenn sie zur Form passt.
+function withEnding(form, ending) {
+  const f = String(form || '')
+  const e = String(ending || '')
+  if (e && f.endsWith(e) && f.length > e.length) {
+    return <>{f.slice(0, f.length - e.length)}<span className="gr-mark">{e}</span></>
+  }
+  return f
+}
+
+// Aktives Konjugations-Training einer Zeitform: Beispielverben aus der DB, alle Personen ausfüllen.
+function ConjugationDrill({ tenseId, tenseName }) {
+  const [rows, setRows] = useState(null)
+  const [answers, setAnswers] = useState({})
+  const [revealed, setRevealed] = useState({})
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const { data } = await supabase
+        .from('conjugation_examples')
+        .select('*')
+        .eq('tense_key', tenseId)
+        .order('sort')
+      if (alive) setRows(data || [])
+    })()
+    return () => { alive = false }
+  }, [tenseId])
+
+  if (rows === null || rows.length === 0) return null
+
+  const k = (vi, p) => `${vi}:${p}`
+  const revealOne = (vi, p) => setRevealed(prev => ({ ...prev, [k(vi, p)]: true }))
+  const revealVerb = (vi, persons) => setRevealed(prev => { const c = { ...prev }; persons.forEach(p => { c[k(vi, p)] = true }); return c })
+  const focusNext = (vi, persons, p) => {
+    const idx = persons.indexOf(p)
+    const next = persons[idx + 1]
+    if (next) setTimeout(() => { const el = document.querySelector(`[data-cj="${tenseId}-${vi}-${next}"]`); if (el) el.focus() }, 0)
+  }
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
+      <button onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-2 text-left">
+        <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Endungen üben</span>
+        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>{tenseName} durchkonjugieren</span>
+        <span className="text-sm font-medium" style={{ color: 'var(--blue)' }}>{open ? 'ausblenden ▴' : 'öffnen ▾'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 flex flex-col gap-3">
+          {rows.map((r, vi) => {
+            const persons = PERSON_ORDER.filter(p => r.forms && r.forms[p] != null)
+            return (
+              <div key={r.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+                <div className="mb-2 text-sm font-bold" style={{ color: 'var(--ink)' }}>
+                  {r.verb} <span className="text-xs font-normal" style={{ color: 'var(--ink-faint)' }}>· {r.label}</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {persons.map(p => {
+                    const key = k(vi, p)
+                    const val = answers[key] || ''
+                    const isRev = !!revealed[key]
+                    const form = r.forms[p]
+                    const correct = norm(val) === norm(form)
+                    let borderColor = 'var(--line)'
+                    if (isRev) borderColor = correct ? '#16a34a' : '#ef4444'
+                    return (
+                      <div key={p} className="flex items-center gap-2 text-sm">
+                        <span className="w-24 flex-none text-right" style={{ color: 'var(--ink-soft)' }}>{SUBJ[p]}</span>
+                        <input
+                          type="text"
+                          data-cj={`${tenseId}-${vi}-${p}`}
+                          value={val}
+                          disabled={isRev}
+                          onChange={e => setAnswers(prev => ({ ...prev, [key]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (!isRev) { revealOne(vi, p); focusNext(vi, persons, p) } } }}
+                          className="w-40 rounded-lg border-2 px-2 py-1 font-sans text-base outline-none"
+                          style={{ borderColor, backgroundColor: isRev ? (correct ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)') : 'white', color: 'var(--ink)' }}
+                        />
+                        {isRev && (
+                          <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>
+                            {correct ? '✓ ' : '✓ '}{withEnding(form, r.endings && r.endings[p])}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <button onClick={() => revealVerb(vi, persons)} className="mt-2 text-xs font-medium" style={{ color: 'var(--blue)' }}>Lösung zeigen</button>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -253,12 +355,17 @@ export default function GrammarPractice({ setView, setInSession }) {
         <button onClick={handleStop} className="mb-5 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>← Beenden</button>
         <h2 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Grammatik üben</h2>
         <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
-          Eine zusammenhängende Geschichte in {NUM_PARTS} Teilen. Du übst deine fälligen Verben in diesen zwei Zeitformen –
-          schau dir vorher die Theorie an.
+          Eine zusammenhängende Geschichte in {NUM_PARTS} Teilen. Du übst deine fälligen Verben in diesen zwei Zeitformen.
+          Schau dir vorher die Theorie an und übe die Endungen (Beispielverben durchkonjugieren).
         </p>
 
-        <div className="mb-6 flex flex-col gap-3">
-          {forms.map(f => <FormTheory key={f.key} form={f} />)}
+        <div className="mb-6 flex flex-col gap-6">
+          {forms.map(f => (
+            <div key={f.key} className="flex flex-col gap-3">
+              <FormTheory form={f} />
+              <ConjugationDrill tenseId={f.id} tenseName={f.name} />
+            </div>
+          ))}
         </div>
 
         <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
