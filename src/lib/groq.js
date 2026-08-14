@@ -283,72 +283,107 @@ export async function generateGrammarStoryRun(opts) {
   const tenseList = tenseNames.join(' UND ')
   const isFirst = chapterIndex <= 1 || !storySoFar
   const isLast = chapterIndex >= totalChapters
-
   const recap = capText(String(storySoFar || ''), 1500)
 
-  const prompt = `Du schreibst KAPITEL ${chapterIndex} von ${totalChapters} einer fortlaufenden französischen Geschichte. Die Kapitel ergeben ZUSAMMEN eine einzige, sich entwickelnde Geschichte. Jedes Kapitel ist ein LÜCKENTEXT zum Üben von Verbformen.
+  // ---------- DURCHLAUF 1: Geschichte schreiben + Ziel-Verben markieren ----------
+  const prompt1 = `Du schreibst KAPITEL ${chapterIndex} von ${totalChapters} einer fortlaufenden französischen Geschichte. Die Kapitel ergeben ZUSAMMEN eine einzige, sich entwickelnde Geschichte.
 
 ${isFirst
   ? 'Dies ist das ERSTE Kapitel – beginne die Geschichte (führe Figur/Ort/Situation ein).'
   : `BISHERIGE GESCHICHTE (Kontext, führe sie natürlich WEITER – nicht neu anfangen, nicht wiederholen):\n"""\n${recap}\n"""`}
 ${isLast ? 'Dies ist das LETZTE Kapitel – bringe die Geschichte zu einem runden Abschluss.' : ''}
 
-ZU ÜBENDE VERBEN – diese MÜSSEN in diesem Kapitel ALLE als Lücke vorkommen (Grundform/Infinitiv): ${verbList}
-${reuseList ? `Optional darfst du zusätzlich diese bereits geübten Verben erneut als Lücke einbauen: ${reuseList}.` : ''}
+ZU ÜBENDE VERBEN – diese MÜSSEN in diesem Kapitel ALLE vorkommen (Grundform/Infinitiv): ${verbList}
+${reuseList ? `Optional darfst du zusätzlich diese bereits geübten Verben verwenden: ${reuseList}.` : ''}
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
+Schreibe das Kapitel als NORMALEN französischen Text – NOCH KEINE Lücken, KEINE Platzhalter, alle Verben ganz normal ausgeschrieben.
 REGELN:
-- Länge dieses Kapitels: ca. 700–1200 Zeichen, in natürlich fließenden, vollständigen Sätzen. Die Geschichte darf ruhig ausführlich sein.
-- PFLICHT: JEDES oben geforderte Verb kommt in diesem Kapitel mindestens einmal als Lücke vor, konjugiert in EINER der 2 Zeitformen (${tenseList}). Gestalte Kontext und Person so, dass es natürlich klingt.
-- NUR die oben geforderten (und optional die zusätzlichen) Verben werden zu LÜCKEN. Das gilt AUSNAHMSLOS: häufige Verben wie inviter, mettre, boire, aller, être, avoir, commencer usw. bleiben normaler Klartext und werden NIEMALS zu einer Lücke, es sei denn, sie stehen ausdrücklich in der geforderten Liste oben. Erzeuge KEINE Lücke für ein Verb, das nicht oben gelistet ist.
-- NICHT jeder Satz hat eine Lücke – baue auch verbindende Erzählsätze ganz ohne Lücke ein, damit die Geschichte natürlich fließt und länger wird.
-- Jede Lücke ersetzt genau EIN konjugiertes Verb durch einen Platzhalter {{1}}, {{2}}, {{3}} … (fortlaufend). An der Platzhalter-Stelle steht NUR der Platzhalter, nie das Verb im Klartext.
-- Jede Lücke ist in GENAU EINER der Zeitformen (${tenseList}) konjugiert.
-- KORREKTHEIT (SEHR WICHTIG): "answer" ist die grammatikalisch KORREKTE Konjugation von GENAU "base" in "tense" und "person" – NIEMALS ein anderes Verb (z. B. NICHT "allait" von aller, wenn das Verb "ballotter" ist). "answer", "base", "tense", "person" und "note" müssen zu 100 % zueinander passen. Prüfe jede Form, bevor du sie ausgibst.
-- Die "answer" enthält NUR den konjugierten Verbteil. Bei zusammengesetzten Zeiten (Passé composé, Plus-que-parfait, Futur antérieur, Conditionnel passé, Subjonctif passé) stehen Hilfsverb + Partizip ZUSAMMENHÄNGEND (z. B. "ai mangé", "était tortillée"). Bei Futur proche ist die "answer" die VOLLSTÄNDIGE Form "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter", "allons partir") – niemals nur "vais".
-- KEINE Adverbien/kleinen Wörter (déjà, souvent, toujours, vraiment, bien, ne, pas …) innerhalb der "answer" oder zwischen Hilfsverb und Partizip. Solche Wörter stehen als Klartext AUSSERHALB der Lücke. Formuliere den Satz so, dass die Verbform nicht von einem Adverb unterbrochen wird.
-- Vorangestellte Pronomen bleiben Klartext VOR der Lücke und gehören NICHT in die "answer": Reflexivpronomen (se, s', me, m', te, t', nous, vous) und Objektpronomen (le, la, les, l', lui, leur). Beispiel: Text "Pierre m'{{1}}" mit answer "invita"; Text "elle s'{{2}}" mit answer "était tortillée". Die "answer" beginnt beim konjugierten (Hilfs-)Verb.
-- Wo es natürlich passt, decke verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles); nutze ruhig Dialog/Ansprache. Aber NUR wenn es natürlich klingt – erzwinge keine unpassende Person.${neededPersons.length ? ` Versuche – nur wenn es natürlich passt – diese Personen einzubauen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
-- Wähle einen Kontext, der die jeweilige Zeitform natürlich motiviert (Imparfait: Gewohnheit/Beschreibung in der Vergangenheit; Passé composé: einmalige abgeschlossene Handlung; Futur: Zukunft; Subjonctif: nach que/il faut que …).
+- Länge ca. 700–1200 Zeichen, natürliche vollständige Sätze, Geschichte fortsetzen.
+- Jedes oben geforderte Verb kommt mindestens einmal vor, konjugiert in EINER der 2 Zeitformen (${tenseList}), passend zum Kontext.
+- Nicht jeder Satz braucht ein Ziel-Verb; baue verbindende Erzählsätze ein.
+- Wähle Kontexte, die die Zeitform motivieren (Imparfait: Gewohnheit/Beschreibung; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).${neededPersons.length ? ` Verwende – wo natürlich – auch diese Personen: ${neededPersons.map(p => PERSON_LABEL[p] || p).join(', ')}.` : ''}
 
-Für jede Lücke gib an:
-- "n": Nummer des Platzhalters
-- "answer": die KORREKTE konjugierte Verbform an dieser Stelle – NUR der Verbteil, OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà …). Zusammengesetzte Zeiten: Hilfsverb + Partizip zusammen (z. B. "était tortillée"); Futur proche: "aller + Infinitiv" (z. B. "vais ballotter").
-- "de": deutsche Bedeutung des Verbs (aus der Liste)
-- "base": Grundform/Infinitiv (wie in der Liste) – GENAU dieses Verb wird konjugiert
-- "tense": GENAU einer dieser Namen: ${tenseNames.map(n => `"${n}"`).join(', ')}
-- "person": GENAU einer dieser Codes: "1sg","2sg","3sg","1pl","2pl","3pl"
-- "reason": eine INDIVIDUELLE, konkrete Begründung AUF DEUTSCH (1–2 Sätze), bezogen auf GENAU DIESEN Satz: welches Signalwort / welcher Kontext hier diese Zeitform verlangt (z. B. "nach 'il faut que' steht der Subjonctif", "'quand' + einmalige abgeschlossene Handlung → Passé composé", "'demain' → nahe Zukunft, Futur proche"). Formuliere JEDE Begründung anders, KEINE wiederholten Standardsätze. Nenne NIEMALS die konjugierte Lösung.
-- "note": ganz kurze deutsche Formangabe (z. B. "Imparfait, 1. Person Singular von manger") – diese wird erst NACH dem Ausfüllen gezeigt.
+Gib zusätzlich für JEDES Vorkommen eines der ZU ÜBENDEN Verben (nur diese, keine anderen) ein "target"-Objekt zurück mit:
+- "base": Infinitiv (aus der Liste)
+- "de": deutsche Bedeutung (aus der Liste)
+- "tense": genau eine der 2 Zeitformen (${tenseNames.map(n => `"${n}"`).join(', ')})
+- "person": Code aus dem Subjekt des Satzes – "1sg","2sg","3sg","1pl","2pl","3pl"
+- "verb_surface": der EXAKTE, zusammenhängende konjugierte Verbteil, GENAU so wie er im "text" steht (muss als Teilstring im text vorkommen). NUR das Verb: bei zusammengesetzten Zeiten Hilfsverb+Partizip zusammen (z. B. "était tortillée"), bei Futur proche "aller+Infinitiv" (z. B. "vais ballotter"). OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà, souvent …). Setze KEIN Adverb zwischen Hilfsverb und Partizip, damit dieser Teil zusammenhängend bleibt.
+- "sentence": der Satz, in dem das Verb steht.
 
-WICHTIG: Verwende in den Texten einfache 'Anführungszeichen', niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown, ohne Backticks, ohne Text außerhalb des JSON.
-
-Beispiel-Format (beachte: Pronomen 's''/'m'' stehen im Text VOR der Lücke, NICHT in "answer"; Futur proche als ganze Form):
-{"title":"La rencontre","text":"Quand je suis arrivé à Paris, une jeune femme s'{{1}} nerveusement sur son siège, puis elle m'{{2}} à prendre un café. Demain, nous {{3}} le tour du quartier ensemble.","blanks":[{"n":1,"answer":"était tortillée","de":"sich winden","base":"se tortiller","tense":"Plus-que-parfait","person":"3sg","reason":"Ihr Zappeln lag schon VOR meiner Ankunft abgeschlossen vor – Vorzeitigkeit in der Vergangenheit, deshalb Plus-que-parfait.","note":"Plus-que-parfait, 3. Person Singular von se tortiller"},{"n":2,"answer":"invita","de":"einladen","base":"inviter","tense":"Passé simple","person":"3sg","reason":"Einmalige, abgeschlossene Handlung im literarischen Erzählton – deshalb Passé simple.","note":"Passé simple, 3. Person Singular von inviter"},{"n":3,"answer":"allons faire","de":"machen","base":"faire","tense":"Futur proche","person":"1pl","reason":"'Demain' kündigt eine nahe, geplante Zukunft an – deshalb Futur proche mit aller + Infinitiv.","note":"Futur proche, 1. Person Plural von faire"}]}
+WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR mit gültigem JSON ohne Markdown:
+{"title":"...","text":"...","targets":[{"base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","verb_surface":"se tortillait","sentence":"..."}]}
 
 Jetzt Kapitel ${chapterIndex}:`
 
-  let parsed
-  try { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.45 })) }
-  catch { parsed = parseGroqJSON(await callGroq(prompt, { maxTokens: 3400, temperature: 0.35 })) }
+  let s
+  try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 2600, temperature: 0.5 })) }
+  catch { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 2600, temperature: 0.35 })) }
 
-  const title = String(parsed?.title || '').trim()
-  const text = String(parsed?.text || '')
-  const blanks = (Array.isArray(parsed?.blanks) ? parsed.blanks : [])
-    .map(b => ({
-      n: Number(b.n),
-      answer: String(b.answer || '').trim(),
-      de: String(b.de || '').trim(),
-      base: String(b.base || '').trim(),
-      tense: String(b.tense || '').trim(),
-      person: String(b.person || '').trim(),
-      reason: String(b.reason || '').trim(),
-      note: String(b.note || '').trim(),
+  const title = String(s?.title || '').trim()
+  let text = String(s?.text || '')
+  const targets = (Array.isArray(s?.targets) ? s.targets : [])
+    .map(t => ({
+      base: String(t.base || '').trim(),
+      de: String(t.de || '').trim(),
+      tense: String(t.tense || '').trim(),
+      person: String(t.person || '').trim(),
+      surface: String(t.verb_surface || '').trim(),
+      sentence: String(t.sentence || '').trim(),
     }))
-    .filter(b => Number.isInteger(b.n) && b.answer.length > 0 && text.includes(`{{${b.n}}}`))
+    .filter(t => t.base && t.surface && text.includes(t.surface))
 
-  if (!text || blanks.length === 0) throw new Error('Groq: Kein gültiges Kapitel erzeugt')
+  if (!text || targets.length === 0) throw new Error('Groq: Kein gültiges Kapitel erzeugt')
+
+  // ---------- DURCHLAUF 2: Formen korrekt konjugieren + individuelle Begründung ----------
+  const list = targets.map((t, i) =>
+    `${i + 1}. Verb (Infinitiv): "${t.base}" | Zeitform: "${t.tense}" | Person: "${PERSON_LABEL[t.person] || t.person}" | Kontextsatz: "${t.sentence}"`
+  ).join('\n')
+
+  const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
+
+${list}
+
+Für jeden Eintrag (gleiche Reihenfolge, gleiche Anzahl) gib zurück:
+- "answer": die grammatikalisch korrekte französische Form von base in der angegebenen Zeitform + Person. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"); Futur proche = "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m' …), OHNE Adverbien.
+- "reason": INDIVIDUELLE deutsche Begründung (1–2 Sätze), warum im Kontextsatz genau diese Zeitform passt (konkretes Signalwort/Kontext). Jede Begründung anders formulieren, keine Standardsätze. Nenne NICHT die Lösung.
+- "note": kurze deutsche Formangabe, z. B. "Imparfait, 1. Person Singular von ${targets[0]?.base || 'manger'}".
+
+Antworte NUR mit gültigem JSON ohne Markdown:
+{"answers":[{"answer":"...","reason":"...","note":"..."}]}`
+
+  let a
+  try { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2200, temperature: 0.25 })) }
+  catch { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2200, temperature: 0.2 })) }
+  const answers = Array.isArray(a?.answers) ? a.answers : []
+
+  // ---------- DURCHLAUF 3 (Code): Lücken einsetzen ----------
+  // Längste verb_surface zuerst ersetzen, damit kein Teilstring-Konflikt entsteht.
+  const order = targets.map((_, i) => i).sort((x, y) => targets[y].surface.length - targets[x].surface.length)
+  const blanks = []
+  let n = 0
+  for (const i of order) {
+    const t = targets[i]
+    if (!text.includes(t.surface)) continue
+    const ans = answers[i] || {}
+    const answer = (String(ans.answer || '').trim() || t.surface)
+    n += 1
+    text = text.replace(t.surface, `{{${n}}}`)
+    blanks.push({
+      n,
+      answer,
+      de: t.de,
+      base: t.base,
+      tense: t.tense,
+      person: t.person,
+      reason: String(ans.reason || '').trim(),
+      note: String(ans.note || '').trim() || `${t.tense}, ${PERSON_LABEL[t.person] || ''} von ${t.base}`,
+    })
+  }
+
+  if (blanks.length === 0) throw new Error('Groq: Keine Lücken erzeugt')
   return { title, text, blanks }
 }
 

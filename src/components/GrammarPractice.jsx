@@ -176,16 +176,33 @@ export default function GrammarPractice({ setView, setInSession }) {
       const { data, error: err } = await supabase
         .from('cards')
         .select('*')
-        .eq('status', 'review')
         .eq('wortart', 'Verb')
 
       if (err) { setError('Fehler beim Laden der Verben: ' + err.message); setPhase('error'); return }
 
-      const due = (data || []).filter(c => new Date(c.next_review_at) <= new Date(now))
+      const nowMs = new Date(now).getTime()
+      const all = data || []
+      // Heute fällige Verben (Pflicht).
+      const due = all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
       if (due.length === 0) { setPhase('none'); return }
 
-      // ALLE heute fälligen Verben – jedes muss über die Session mindestens einmal drankommen.
-      const chosenVerbs = pickN(due, due.length).map(c => ({ french: c.french, german: c.german }))
+      // Wenn weniger als 10: mit den nächsten anstehenden Verben auffüllen
+      // (nach next_review_at sortiert; Verben ohne Datum zuletzt).
+      const TARGET = 10
+      let pool = pickN(due, due.length)
+      if (pool.length < TARGET) {
+        const dueIds = new Set(due.map(c => c.id))
+        const rest = all
+          .filter(c => !dueIds.has(c.id))
+          .sort((x, y) => {
+            const tx = x.next_review_at ? new Date(x.next_review_at).getTime() : Infinity
+            const ty = y.next_review_at ? new Date(y.next_review_at).getTime() : Infinity
+            return tx - ty
+          })
+        pool = [...pool, ...rest.slice(0, TARGET - pool.length)]
+      }
+
+      const chosenVerbs = pool.map(c => ({ french: c.french, german: c.german }))
       const chosenForms = pickN(verbForms(), 2)
 
       setVerbs(chosenVerbs)
