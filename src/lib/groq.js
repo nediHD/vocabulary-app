@@ -304,7 +304,7 @@ ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
 LÄNGE: Jeder Abschnitt hat 4–6 vollständige Sätze (ausführlich, nicht nur ein paar Wörter). Die ganze Geschichte soll dadurch schön lang werden.
 
-WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 2–4 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS mindestens 2 Platzhalter enthalten. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
+WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 3–5 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 3 Platzhalter (Lücken) enthalten – lieber ein Ziel-Verb ein zweites Mal einbauen, als unter 3 Lücken zu bleiben. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
 
 PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
 
@@ -324,7 +324,7 @@ Gib für JEDEN Abschnitt "text" (mit den {{n}}-Lücken) und "blanks" (ein Eintra
 - "sentence": der ganze Satz, in dem die Lücke steht – aber MIT dem Verb im Klartext (statt Platzhalter), als Kontext.
 
 WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR mit gültigem JSON ohne Markdown:
-{"title":"...","parts":[{"text":"Ce matin-là, Paul se {{1}} très tôt et {{2}} un café en pensant à la journée qui l'attendait.","blanks":[{"n":1,"answer":"tortillait","base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","sentence":"Ce matin-là, Paul se tortillait, incapable de rester en place."},{"n":2,"answer":"but","base":"boire","de":"trinken","tense":"Passé simple","person":"3sg","sentence":"Il but un café en pensant à la journée."}]}]}`
+{"title":"...","parts":[{"text":"Ce matin-là, Paul se {{1}} très tôt et {{2}} un café en pensant à la journée; il savait qu'il {{3}} rester calme.","blanks":[{"n":1,"answer":"tortillait","base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","sentence":"Ce matin-là, Paul se tortillait, incapable de rester en place."},{"n":2,"answer":"but","base":"boire","de":"trinken","tense":"Passé simple","person":"3sg","sentence":"Il but un café en pensant à la journée."},{"n":3,"answer":"devait","base":"devoir","de":"müssen","tense":"Imparfait","person":"3sg","sentence":"Il savait qu'il devait rester calme."}]}]}`
 
   let s
   try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 6000, temperature: 0.6 })) }
