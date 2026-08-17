@@ -288,7 +288,7 @@ export async function generateGrammarStory(opts) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
-  const { verbs = [], forms = [], parts: numParts = 7 } = opts || {}
+  const { verbs = [], forms = [], parts: numParts = 7, knownForms = null } = opts || {}
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
   const tenseList = tenseNames.join(' UND ')
@@ -418,6 +418,19 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
     })
   } catch { /* Verifikation optional: bei Fehler bleiben die Formen aus Durchlauf 2 */ }
 
+  // ---------- Bekannte Formen erzwingen (Konsistenz mit dem Konjugations-Drill) ----------
+  // Die 3 unregelmäßigen Verben wurden bereits separat (mit Verifikation) durchkonjugiert.
+  // Steht für eine Lücke die exakte Form aus dieser Tabelle bereit, hat sie Vorrang vor
+  // den vom Story-Durchlauf erzeugten Formen – so stimmen Drill und Lückentext überein.
+  if (knownForms) {
+    flat.forEach((f) => {
+      const b = parts[f.pi].blanks[f.bi]
+      const kf = knownForms[grBaseKey(b.base)]
+      const forced = kf && kf[b.person]
+      if (forced) b._answer = forced
+    })
+  }
+
   // ---------- Runs bauen (Platzhalter stehen schon im Text) ----------
   const runs = parts.map(p => ({
     title,
@@ -436,6 +449,86 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
 
   if (runs.length === 0) throw new Error('Groq: Keine Runs erzeugt')
   return { title, runs }
+}
+
+// ---- Volle Konjugation mehrerer Verben in EINER Zeitform (für den Drill) ----
+// Konjugiert jedes übergebene Verb in allen 6 Personen der Zielform, mit einem
+// zweiten Verifikations-Durchlauf. Für den Impératif gibt es nur tu/nous/vous.
+//
+// opts: { form:{name}, verbs:[{french,german}] }
+// return: [{ verb, german, label, forms:{1sg..3pl}, endings:null }]
+export async function conjugateVerbs(opts) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+  const { form, verbs = [] } = opts || {}
+  const tenseName = String(form?.name || '').trim()
+  const isImperatif = /imp[ée]ratif/i.test(tenseName) || form?.id === 'imperatif'
+  if (verbs.length === 0) return []
+
+  const persons = isImperatif ? ['2sg', '1pl', '2pl'] : ['1sg', '2sg', '3sg', '1pl', '2pl', '3pl']
+  const personHint = isImperatif
+    ? 'Der Impératif hat NUR die Formen 2sg (tu), 1pl (nous), 2pl (vous) – OHNE Subjektpronomen. Für 1sg, 3sg und 3pl gib null.'
+    : 'Alle sechs Personen: 1sg (je), 2sg (tu), 3sg (il/elle), 1pl (nous), 2pl (vous), 3pl (ils/elles).'
+  const infList = verbs.map((v, i) => `${i + 1}. "${v.french}" (${v.german})`).join('\n')
+
+  const prompt = `Du bist Französisch-Grammatik-Experte. Konjugiere JEDES der folgenden Verben vollständig in der Zeitform/dem Modus "${tenseName}".
+
+${infList}
+
+${personHint}
+
+REGELN für jede Form (nur der Verbteil):
+- Zusammengesetzte Zeiten = Hilfsverb + Partizip zusammen (z. B. "ai pris", "était venu").
+- Futur proche = "aller"(konjugiert) + Infinitiv (z. B. "vais prendre").
+- KEINE Subjektpronomen (je/tu/il …), KEINE Reflexivpronomen, KEINE Adverbien.
+- Konjugiere GENAU das angegebene Verb, niemals ein anderes.
+
+Antworte NUR mit gültigem JSON ohne Markdown, gleiche Reihenfolge und Anzahl wie oben:
+{"verbs":[{"infinitif":"prendre","forms":{"1sg":"...","2sg":"...","3sg":"...","1pl":"...","2pl":"...","3pl":"..."}}]}`
+
+  let gen
+  try { gen = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.2 })) }
+  catch { gen = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.1 })) }
+  const genVerbs = Array.isArray(gen?.verbs) ? gen.verbs : []
+
+  const pick = (obj, p) => {
+    const v = obj && obj[p]
+    if (v == null) return null
+    const s = String(v).trim()
+    return s && s.toLowerCase() !== 'null' ? s : null
+  }
+  const rows = verbs.map((v, i) => {
+    const src = genVerbs[i]?.forms || {}
+    const forms = {}
+    for (const p of persons) { const f = pick(src, p); if (f) forms[p] = f }
+    return { verb: v.french, german: v.german, label: 'unregelmäßig', forms, endings: null }
+  })
+
+  // ---- Verifikations-Durchlauf: jede Einzelform prüfen/korrigieren ----
+  const flat = []
+  rows.forEach((r, ri) => persons.forEach(p => { if (r.forms[p]) flat.push({ ri, p, verb: r.verb, form: r.forms[p] }) }))
+  if (flat.length) {
+    const vList = flat.map((t, i) =>
+      `${i + 1}. Verb "${t.verb}" | Zeitform "${tenseName}" | Person "${PERSON_LABEL[t.p] || t.p}" | vorgeschlagen: "${t.form}"`
+    ).join('\n')
+    const promptV = `Du bist ein strenger Französisch-Grammatik-Prüfer. Prüfe für JEDEN Eintrag, ob die vorgeschlagene Form die KORREKTE Konjugation von GENAU diesem Verb in der angegebenen Zeitform + Person ist. Nur der Verbteil (zusammengesetzte Zeiten: Hilfsverb+Partizip; Futur proche: aller+Infinitiv), OHNE Pronomen, OHNE Adverbien. Ist sie richtig, gib sie unverändert zurück; ist sie falsch, gib die korrigierte Form.
+
+${vList}
+
+Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl:
+{"checked":["Form 1","Form 2","..."]}`
+    try {
+      const v = parseGroqJSON(await callGroq(promptV, { maxTokens: 1600, temperature: 0.1 }))
+      const checked = Array.isArray(v?.checked) ? v.checked : []
+      flat.forEach((t, k) => {
+        const corr = String(checked[k] || '').trim()
+        if (corr) rows[t.ri].forms[t.p] = corr
+      })
+    } catch { /* Verifikation optional */ }
+  }
+
+  return rows.filter(r => Object.keys(r.forms).length > 0)
 }
 
 // Personencode → gut lesbares deutsches Label (für das Hinweis-Popup)

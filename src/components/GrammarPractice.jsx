@@ -1,25 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { GRAMMAR } from '../lib/grammar'
-import { generateGrammarStory, personLabel } from '../lib/groq'
+import { orderedForms, IRREGULAR_VERBS } from '../lib/grammar'
+import { generateGrammarStory, conjugateVerbs, personLabel } from '../lib/groq'
 import { Explanation, useTheory } from './Grammar'
 
 const ALL_PERSONS = ['1sg', '2sg', '3sg', '1pl', '2pl', '3pl']
 const NUM_PARTS = 7
-
-// Alle konjugierten Verb-Zeitformen/Modi (Verben-Sektion, Gruppen Zeiten + Modi, style 'form').
-function verbForms() {
-  const sec = GRAMMAR.find(s => s.id === 'verben')
-  if (!sec) return []
-  const out = []
-  for (const g of sec.groups) {
-    if (g.id !== 'zeiten-indikativ' && g.id !== 'modi') continue
-    for (const t of g.topics) {
-      if (t.style === 'form') out.push({ key: `${sec.id}/${g.id}/${t.id}`, id: t.id, name: t.name })
-    }
-  }
-  return out
-}
+const NUM_IRREGULAR = 3   // unregelmäßige Verben pro Runde (durchkonjugieren + im Lückentext)
+const TARGET_DUE = 10      // so viele fällige DB-Verben pro Runde anvisieren
 
 function pickN(arr, n) {
   const a = [...arr]
@@ -83,27 +71,14 @@ function withEnding(form, ending) {
   return f
 }
 
-// Aktives Konjugations-Training einer Zeitform: Beispielverben aus der DB, alle Personen ausfüllen.
-function ConjugationDrill({ tenseId, tenseName }) {
-  const [rows, setRows] = useState(null)
+// Aktives Konjugations-Training: die 3 unregelmäßigen Verben dieser Runde
+// (Formen kommen vorkonjugiert aus `rows`), alle Personen selbst ausfüllen.
+function ConjugationDrill({ tenseId, tenseName, rows }) {
   const [answers, setAnswers] = useState({})
   const [revealed, setRevealed] = useState({})
   const [open, setOpen] = useState(false)
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const { data } = await supabase
-        .from('conjugation_examples')
-        .select('*')
-        .eq('tense_key', tenseId)
-        .order('sort')
-      if (alive) setRows(data || [])
-    })()
-    return () => { alive = false }
-  }, [tenseId])
-
-  if (rows === null || rows.length === 0) return null
+  if (!rows || rows.length === 0) return null
 
   const k = (vi, p) => `${vi}:${p}`
   const revealOne = (vi, p) => setRevealed(prev => ({ ...prev, [k(vi, p)]: true }))
@@ -117,8 +92,8 @@ function ConjugationDrill({ tenseId, tenseName }) {
   return (
     <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
       <button onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-2 text-left">
-        <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Endungen üben</span>
-        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>{tenseName} durchkonjugieren</span>
+        <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Unregelmäßige üben</span>
+        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>3 Verben in {tenseName} durchkonjugieren</span>
         <span className="text-sm font-medium" style={{ color: 'var(--blue)' }}>{open ? 'ausblenden ▴' : 'öffnen ▾'}</span>
       </button>
 
@@ -127,9 +102,9 @@ function ConjugationDrill({ tenseId, tenseName }) {
           {rows.map((r, vi) => {
             const persons = PERSON_ORDER.filter(p => r.forms && r.forms[p] != null)
             return (
-              <div key={r.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+              <div key={r.verb || vi} className="rounded-xl border p-3" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
                 <div className="mb-2 text-sm font-bold" style={{ color: 'var(--ink)' }}>
-                  {r.verb} <span className="text-xs font-normal" style={{ color: 'var(--ink-faint)' }}>· {r.label}</span>
+                  {r.verb} <span className="text-xs font-normal" style={{ color: 'var(--ink-faint)' }}>· {r.german || r.label}</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {persons.map(p => {
@@ -155,7 +130,7 @@ function ConjugationDrill({ tenseId, tenseName }) {
                         />
                         {isRev && (
                           <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>
-                            {correct ? '✓ ' : '✓ '}{withEnding(form, r.endings && r.endings[p])}
+                            ✓ {withEnding(form, r.endings && r.endings[p])}
                           </span>
                         )}
                       </div>
@@ -198,11 +173,49 @@ function HintPopover({ blank, onClose }) {
   )
 }
 
+// Wählt die Zielform dieser Runde nach der Form-SRS:
+//  1) die am stärksten überfällige Wiederhol-Form,
+//  2) sonst die nächste NEUE Form in der Lern-Reihenfolge,
+//  3) sonst die als Nächstes anstehende Wiederhol-Form.
+function pickTargetForm(forms, progressRows) {
+  const prog = new Map((progressRows || []).map(r => [r.form_key, r]))
+  const now = Date.now()
+  const t = (r) => (r?.next_review_at ? new Date(r.next_review_at).getTime() : Infinity)
+
+  const due = forms
+    .filter(f => { const p = prog.get(f.id); return p && p.status === 'review' && p.next_review_at && t(p) <= now })
+    .sort((a, b) => t(prog.get(a.id)) - t(prog.get(b.id)))
+  if (due.length) return due[0]
+
+  const nextNew = forms.find(f => { const p = prog.get(f.id); return !p || p.status === 'new' })
+  if (nextNew) return nextNew
+
+  const soonest = [...forms].sort((a, b) => t(prog.get(a.id)) - t(prog.get(b.id)))
+  return soonest[0] || forms[0]
+}
+
+// Speichert das Selbst-Urteil zur Zielform (verstanden → längeres Intervall).
+async function gradeForm(form, understood) {
+  if (!form) return
+  const { data } = await supabase.from('form_progress').select('interval_days').eq('form_key', form.id).maybeSingle()
+  const prev = data?.interval_days || 0
+  const interval = understood ? (prev >= 1 ? Math.min(prev * 2, 90) : 2) : 1
+  const next = new Date(Date.now() + interval * 86400000).toISOString()
+  await supabase.from('form_progress').upsert({
+    form_key: form.id,
+    status: 'review',
+    interval_days: interval,
+    next_review_at: next,
+    updated_at: new Date().toISOString(),
+  })
+}
+
 export default function GrammarPractice({ setView, setInSession }) {
-  const [phase, setPhase] = useState('loading') // loading | theory | generating | run | finished | error | none
+  const [phase, setPhase] = useState('loading') // loading | generating | theory | run | finished | error | none
   const [error, setError] = useState('')
-  const [forms, setForms] = useState([])
-  const [verbs, setVerbs] = useState([])
+  const [form, setForm] = useState(null)          // die eine Zielform dieser Runde
+  const [verbs, setVerbs] = useState([])          // fällige DB-Verben (für die Lücken)
+  const [drillRows, setDrillRows] = useState([])  // 3 unregelmäßige, vorkonjugiert
 
   const [runs, setRuns] = useState([])
   const [runIndex, setRunIndex] = useState(0)
@@ -212,6 +225,7 @@ export default function GrammarPractice({ setView, setInSession }) {
   const [revealed, setRevealed] = useState({})
   const [openHint, setOpenHint] = useState(null)
   const [todoOpen, setTodoOpen] = useState(false)
+  const [graded, setGraded] = useState(false)
 
   useEffect(() => {
     setInSession(true)
@@ -223,6 +237,7 @@ export default function GrammarPractice({ setView, setInSession }) {
     try {
       setPhase('loading')
       setError('')
+      setGraded(false)
       const now = new Date().toISOString()
       const { data, error: err } = await supabase
         .from('cards')
@@ -236,21 +251,55 @@ export default function GrammarPractice({ setView, setInSession }) {
       const due = all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
       if (due.length === 0) { setPhase('none'); return }
 
-      // Auffüllen auf 10, wenn heute weniger fällig sind (nächste nach next_review_at).
-      const TARGET = 10
+      // Fällige DB-Verben auf 10 auffüllen (sonst die als Nächstes anstehenden).
       let pool = pickN(due, due.length)
-      if (pool.length < TARGET) {
+      if (pool.length < TARGET_DUE) {
         const dueIds = new Set(due.map(c => c.id))
         const rest = all.filter(c => !dueIds.has(c.id)).sort((x, y) => {
           const tx = x.next_review_at ? new Date(x.next_review_at).getTime() : Infinity
           const ty = y.next_review_at ? new Date(y.next_review_at).getTime() : Infinity
           return tx - ty
         })
-        pool = [...pool, ...rest.slice(0, TARGET - pool.length)]
+        pool = [...pool, ...rest.slice(0, TARGET_DUE - pool.length)]
       }
+      const dueVerbs = pool.map(c => ({ french: c.french, german: c.german }))
 
-      setVerbs(pool.map(c => ({ french: c.french, german: c.german })))
-      setForms(pickN(verbForms(), 2))
+      // Zielform nach Form-SRS bestimmen.
+      const { data: progressRows } = await supabase.from('form_progress').select('*')
+      const target = pickTargetForm(orderedForms(), progressRows || [])
+
+      // 3 unregelmäßige Verben ziehen.
+      const irregulars = pickN(IRREGULAR_VERBS, NUM_IRREGULAR)
+
+      setForm(target)
+      setVerbs(dueVerbs)
+
+      // ---- Übung erzeugen (Konjugationen + Geschichte) ----
+      setPhase('generating')
+
+      // 1) Die 3 Unregelmäßigen vollständig durchkonjugieren (für den Drill + als Referenz).
+      const rows = await conjugateVerbs({ form: target, verbs: irregulars })
+      setDrillRows(rows)
+
+      // 2) Geschichte erzeugen – Lücken = fällige DB-Verben + dieselben 3 Unregelmäßigen,
+      //    alle in der Zielform. Die konjugierten Formen der Unregelmäßigen werden erzwungen.
+      const knownForms = {}
+      for (const r of rows) knownForms[baseKey(r.verb)] = r.forms
+
+      const result = await generateGrammarStory({
+        verbs: [...dueVerbs, ...irregulars],
+        forms: [target],
+        knownForms,
+        parts: NUM_PARTS,
+      })
+      if (!result?.runs?.length) throw new Error('Keine Geschichte erzeugt')
+
+      setStoryTitle(result.title || '')
+      setRuns(result.runs)
+      setRunIndex(0)
+      setAnswers({})
+      setRevealed({})
+      setOpenHint(null)
       setPhase('theory')
     } catch (e) {
       console.error('GrammarPractice load error:', e)
@@ -259,24 +308,12 @@ export default function GrammarPractice({ setView, setInSession }) {
     }
   }
 
-  const startExercise = async () => {
-    try {
-      setPhase('generating')
-      setError('')
-      const result = await generateGrammarStory({ verbs, forms, parts: NUM_PARTS })
-      if (!result?.runs?.length) throw new Error('Keine Geschichte erzeugt')
-      setStoryTitle(result.title || '')
-      setRuns(result.runs)
-      setRunIndex(0)
-      setAnswers({})
-      setRevealed({})
-      setOpenHint(null)
-      setPhase('run')
-    } catch (e) {
-      console.error('generateGrammarStory error:', e)
-      setError(e.message || 'Geschichte konnte nicht erstellt werden')
-      setPhase('error')
-    }
+  const startExercise = () => {
+    setAnswers({})
+    setRevealed({})
+    setOpenHint(null)
+    setRunIndex(0)
+    setPhase('run')
   }
 
   const handleNext = () => {
@@ -291,6 +328,11 @@ export default function GrammarPractice({ setView, setInSession }) {
     if (confirm('Sitzung beenden?')) { setInSession(false); setView('dashboard') }
   }
 
+  const gradeAndFinish = async (understood) => {
+    setGraded(true)
+    try { await gradeForm(form, understood) } catch (e) { console.error('gradeForm error:', e) }
+  }
+
   // ---------- Basiszustände ----------
   if (phase === 'loading') {
     return <div className="text-center py-20"><p style={{ color: 'var(--ink-soft)' }}>Fällige Verben werden geladen…</p></div>
@@ -299,8 +341,8 @@ export default function GrammarPractice({ setView, setInSession }) {
   if (phase === 'generating') {
     return (
       <div className="text-center py-24">
-        <p className="mb-2" style={{ color: 'var(--ink-soft)' }}>Deine Geschichte wird geschrieben…</p>
-        <p className="text-sm" style={{ color: 'var(--ink-faint)' }}>Das dauert einen Moment (die ganze Session auf einmal).</p>
+        <p className="mb-2" style={{ color: 'var(--ink-soft)' }}>Deine Übung wird vorbereitet…</p>
+        <p className="text-sm" style={{ color: 'var(--ink-faint)' }}>Konjugationen &amp; Geschichte werden erzeugt (einen Moment).</p>
       </div>
     )
   }
@@ -309,7 +351,7 @@ export default function GrammarPractice({ setView, setInSession }) {
     return (
       <div className="mx-auto max-w-2xl text-center py-20">
         <p className="mb-4 text-lg" style={{ color: '#ef4444' }}>{error}</p>
-        <button onClick={() => (verbs.length ? startExercise() : load())}
+        <button onClick={load}
           className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
           style={{ backgroundColor: 'var(--blue)' }}
           onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
@@ -335,15 +377,38 @@ export default function GrammarPractice({ setView, setInSession }) {
     return (
       <div className="mx-auto max-w-2xl text-center py-20">
         <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Geschichte zu Ende! 🎉</h2>
-        <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Üben der Verbformen!</p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button onClick={() => { setInSession(false); setView('dashboard') }}
-            className="rounded-2xl border px-6 py-3 font-semibold transition-colors"
-            style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}>Zur Übersicht</button>
-          <button onClick={load}
-            className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}>Neue Geschichte</button>
-        </div>
+        {!graded ? (
+          <>
+            <p className="mb-2" style={{ color: 'var(--ink-soft)' }}>
+              Hast du <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{form?.name}</span> verstanden?
+            </p>
+            <p className="mb-8 text-sm" style={{ color: 'var(--ink-faint)' }}>Dein Urteil steuert, wann diese Form wiederkommt.</p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button onClick={() => gradeAndFinish(false)}
+                className="rounded-2xl border px-6 py-3 font-semibold transition-colors"
+                style={{ borderColor: '#e0a83a', backgroundColor: 'rgba(217,119,6,0.10)', color: '#b45309' }}>
+                ↻ Noch nicht
+              </button>
+              <button onClick={() => gradeAndFinish(true)}
+                className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+                style={{ backgroundColor: '#16a34a' }}>
+                ✓ Verstanden
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gespeichert. Gute Arbeit! 👏</p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button onClick={() => { setInSession(false); setView('dashboard') }}
+                className="rounded-2xl border px-6 py-3 font-semibold transition-colors"
+                style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}>Zur Übersicht</button>
+              <button onClick={load}
+                className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+                style={{ backgroundColor: 'var(--blue)' }}>Nächste Runde</button>
+            </div>
+          </>
+        )}
       </div>
     )
   }
@@ -355,22 +420,20 @@ export default function GrammarPractice({ setView, setInSession }) {
         <button onClick={handleStop} className="mb-5 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>← Beenden</button>
         <h2 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Grammatik üben</h2>
         <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
-          Eine zusammenhängende Geschichte in {NUM_PARTS} Teilen. Du übst deine fälligen Verben in diesen zwei Zeitformen.
-          Schau dir vorher die Theorie an und übe die Endungen (Beispielverben durchkonjugieren).
+          Diese Runde übst du <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{form?.name}</span>.
+          Schau dir zuerst die Theorie an und konjugiere die drei unregelmäßigen Verben durch – danach folgt die Geschichte.
         </p>
 
-        <div className="mb-6 flex flex-col gap-6">
-          {forms.map(f => (
-            <div key={f.key} className="flex flex-col gap-3">
-              <FormTheory form={f} />
-              <ConjugationDrill tenseId={f.id} tenseName={f.name} />
-            </div>
-          ))}
-        </div>
+        {form && (
+          <div className="mb-6 flex flex-col gap-3">
+            <FormTheory form={form} />
+            <ConjugationDrill tenseId={form.id} tenseName={form.name} rows={drillRows} />
+          </div>
+        )}
 
         <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
           <div className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-            Verben in dieser Session ({verbs.length})
+            Fällige Verben in dieser Runde ({verbs.length})
           </div>
           <div className="flex flex-wrap gap-1.5">
             {verbs.map((v, i) => (
@@ -438,7 +501,7 @@ export default function GrammarPractice({ setView, setInSession }) {
 
       <div className="flex flex-col items-center py-2 sm:py-4">
         {storyTitle && <div className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>{storyTitle}</div>}
-        <h3 className="mb-4 text-xl font-bold" style={{ color: 'var(--ink)' }}>Teil {runIndex + 1}</h3>
+        <h3 className="mb-4 text-xl font-bold" style={{ color: 'var(--ink)' }}>Teil {runIndex + 1} · {form?.name}</h3>
 
         <p className="mb-5 text-center text-sm" style={{ color: 'var(--ink-soft)' }}>
           Fülle die Lücken mit der richtigen Verbform. In Klammern steht das deutsche Wort.
