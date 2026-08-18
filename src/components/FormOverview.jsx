@@ -6,6 +6,7 @@ import { pickTargetForm } from './GrammarPractice'
 // Status einer Zeitform aus ihrem Fortschritts-Eintrag ableiten.
 function formStatus(progressRow, nowMs) {
   if (!progressRow || progressRow.status === 'new') return { key: 'new' }
+  if (progressRow.status === 'learning') return { key: 'learning' }
   const t = progressRow.next_review_at ? new Date(progressRow.next_review_at).getTime() : null
   if (t == null) return { key: 'new' }
   if (t <= nowMs) return { key: 'due' }
@@ -15,6 +16,7 @@ function formStatus(progressRow, nowMs) {
 
 const BADGE = {
   next:      { label: 'Als Nächstes', bg: 'var(--blue)', color: '#fff' },
+  learning:  { label: 'nochmal', bg: 'rgba(217,119,6,0.15)', color: '#b45309' },
   due:       { label: 'fällig', bg: 'rgba(217,119,6,0.15)', color: '#b45309' },
   scheduled: { label: 'gelernt', bg: 'rgba(22,163,74,0.12)', color: '#15803d' },
   new:       { label: 'neu', bg: 'var(--surface-2)', color: 'var(--ink-faint)' },
@@ -98,7 +100,7 @@ export default function FormOverview({ setView }) {
           </ol>
 
           <p className="mt-6 text-center text-xs" style={{ color: 'var(--ink-faint)' }}>
-            „fällig" = zur Wiederholung dran · „gelernt" = kommt später wieder · „neu" = noch nicht geübt
+            „nochmal" = nicht verstanden, gleich wieder dran · „fällig" = zur Wiederholung dran · „gelernt" = verstanden, kommt später wieder · „neu" = noch nicht geübt
           </p>
         </>
       )}

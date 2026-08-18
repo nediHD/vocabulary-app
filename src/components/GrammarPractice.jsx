@@ -174,13 +174,19 @@ function HintPopover({ blank, onClose }) {
 }
 
 // Wählt die Zielform dieser Runde nach der Form-SRS:
-//  1) die am stärksten überfällige Wiederhol-Form,
-//  2) sonst die nächste NEUE Form in der Lern-Reihenfolge,
-//  3) sonst die als Nächstes anstehende Wiederhol-Form.
+//  1) noch NICHT verstandene Formen (Status 'learning') – sofort wieder dran,
+//  2) sonst die am stärksten überfällige Wiederhol-Form,
+//  3) sonst die nächste NEUE Form in der Lern-Reihenfolge,
+//  4) sonst die als Nächstes anstehende Wiederhol-Form.
 export function pickTargetForm(forms, progressRows) {
   const prog = new Map((progressRows || []).map(r => [r.form_key, r]))
   const now = Date.now()
   const t = (r) => (r?.next_review_at ? new Date(r.next_review_at).getTime() : Infinity)
+
+  const learning = forms
+    .filter(f => prog.get(f.id)?.status === 'learning')
+    .sort((a, b) => t(prog.get(a.id)) - t(prog.get(b.id)))
+  if (learning.length) return learning[0]
 
   const due = forms
     .filter(f => { const p = prog.get(f.id); return p && p.status === 'review' && p.next_review_at && t(p) <= now })
@@ -194,20 +200,33 @@ export function pickTargetForm(forms, progressRows) {
   return soonest[0] || forms[0]
 }
 
-// Speichert das Selbst-Urteil zur Zielform (verstanden → längeres Intervall).
+// Speichert das Selbst-Urteil zur Zielform.
+//  verstanden      → Status 'review', längeres Intervall (gilt als gelernt).
+//  nicht verstanden → Status 'learning', sofort wieder fällig (NICHT gelernt).
 async function gradeForm(form, understood) {
   if (!form) return
   const { data } = await supabase.from('form_progress').select('interval_days').eq('form_key', form.id).maybeSingle()
   const prev = data?.interval_days || 0
-  const interval = understood ? (prev >= 1 ? Math.min(prev * 2, 90) : 2) : 1
-  const next = new Date(Date.now() + interval * 86400000).toISOString()
-  await supabase.from('form_progress').upsert({
-    form_key: form.id,
-    status: 'review',
-    interval_days: interval,
-    next_review_at: next,
-    updated_at: new Date().toISOString(),
-  })
+  if (understood) {
+    const interval = prev >= 1 ? Math.min(prev * 2, 90) : 2
+    const next = new Date(Date.now() + interval * 86400000).toISOString()
+    await supabase.from('form_progress').upsert({
+      form_key: form.id,
+      status: 'review',
+      interval_days: interval,
+      next_review_at: next,
+      updated_at: new Date().toISOString(),
+    })
+  } else {
+    // Nicht verstanden: bleibt „am Üben", sofort wieder dran, Intervall zurück auf 0.
+    await supabase.from('form_progress').upsert({
+      form_key: form.id,
+      status: 'learning',
+      interval_days: 0,
+      next_review_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+  }
 }
 
 export default function GrammarPractice({ setView, setInSession }) {
