@@ -169,11 +169,11 @@ Jetzt deine Antwort:`
 export async function generateCloze(words) {
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe eine kurze zusammenhängende Erzählung auf Französisch – eine kleine Szene oder Geschichte mit Anfang, Mitte und Ende – mit diesen Lernwörtern:
+  const prompt = `Schreibe ein paar KURZE französische Sätze, in denen diese Lernwörter natürlich vorkommen:
 
 ${wordList}
 
-LÄNGE: ungefähr 1600 Zeichen (mindestens 1400, höchstens 1900).
+LÄNGE (WICHTIG): SEHR KURZ – nur ${Math.max(3, words.length)} bis ${words.length + 3} kurze Sätze, höchstens ~400 Zeichen. Es muss KEINE Geschichte mit Handlung sein; ein paar sinnvolle, einfache Sätze reichen völlig. Kein Ausschmücken, keine Nebenhandlung.
 
 WICHTIGSTE REGEL – Lückentext: Jedes Vorkommen eines Lernworts im Text wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend nummeriert in der Reihenfolge des Auftretens). Das Lernwort selbst darf an dieser Stelle NICHT im Klartext stehen – dort steht nur der Platzhalter. Jedes Lernwort muss mindestens einmal vorkommen; kommt es mehrmals vor, ist JEDES Vorkommen ein eigener Platzhalter.
 
