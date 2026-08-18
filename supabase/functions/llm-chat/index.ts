@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     const cap = Math.max(Number(max_tokens) || 1024, 2048);
     if (isGpt5) {
       payload.max_completion_tokens = cap;
-      payload.reasoning_effort = "minimal";
+      payload.reasoning_effort = "none";
     } else {
       payload.max_tokens = cap;
       payload.temperature = temperature;
