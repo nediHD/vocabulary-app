@@ -1,5 +1,10 @@
 import { jsonrepair } from 'jsonrepair'
 
+// Groq-Modell zentral. `llama-3.3-70b-versatile` wurde am 16.08.2026 von Groq
+// abgeschaltet; empfohlener Ersatz ist GPT-OSS-120B. Über VITE_GROQ_MODEL
+// jederzeit ohne Code-Änderung austauschbar (z. B. 'qwen/qwen3-32b').
+const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b'
+
 // llama setzt gern deutsche/typografische Anführungszeichen um Wörter MITTEN in
 // JSON-String-Werte („efflanqué", „petit" …). Kommt das schließende Zeichen als
 // gerades ASCII-" heraus, beendet es den JSON-String zu früh → kaputtes JSON.
@@ -72,7 +77,7 @@ Jetzt deine Antwort mit der obigen Liste:`
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 512,
@@ -137,7 +142,7 @@ Jetzt deine Antwort:`
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 1500,
@@ -578,7 +583,7 @@ ${joined}`
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.5,
         max_tokens: 2048,
@@ -633,7 +638,7 @@ export async function generateSentence(word1, word2) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 256,
@@ -678,7 +683,7 @@ async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature,
       max_tokens: maxTokens,
