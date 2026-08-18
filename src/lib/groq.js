@@ -1,10 +1,29 @@
 import { jsonrepair } from 'jsonrepair'
+import { supabase } from './supabase'
 
-// Groq-Modell zentral. `llama-3.3-70b-versatile` wurde am 16.08.2026 von Groq
-// abgeschaltet. Ersatz = `openai/gpt-oss-120b` (Groqs empfohlener starker
-// Ersatz). Muss in den Groq-Org-Einstellungen (Settings → Limits) freigegeben
-// sein, sonst 403. Über VITE_GROQ_MODEL jederzeit austauschbar.
-const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b'
+// Zentraler LLM-Aufruf über die Supabase Edge Function 'llm-chat' (Proxy).
+// Der Provider-Key (OpenAI) liegt SERVER-SEITIG als Supabase-Secret – im
+// Browser-Bundle steht kein LLM-Key mehr. Rückgabe: der reine Text-Inhalt.
+async function llmChat(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
+  const { data, error } = await supabase.functions.invoke('llm-chat', {
+    body: { prompt, max_tokens: maxTokens, temperature },
+  })
+  if (error) {
+    let detail = error.message || 'Aufruf fehlgeschlagen'
+    try {
+      const ctx = await error.context?.json?.()
+      if (ctx?.error) detail = ctx.error
+    } catch { /* Kontext nicht lesbar */ }
+    throw new Error(`LLM: ${detail}`)
+  }
+  if (data?.error) throw new Error(`LLM: ${data.error}`)
+  const content = data?.content
+  if (!content) throw new Error('LLM: Ungültige Antwortstruktur')
+  return content
+}
+
+// Modellwahl liegt jetzt server-seitig im Proxy (Edge Function 'llm-chat',
+// Secret LLM_MODEL, Default gpt-5.6-luna) – nicht mehr im Browser-Bundle.
 
 // llama setzt gern deutsche/typografische Anführungszeichen um Wörter MITTEN in
 // JSON-String-Werte („efflanqué", „petit" …). Kommt das schließende Zeichen als
@@ -54,9 +73,6 @@ function capText(text, max) {
 }
 
 export async function groupWords(words) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
   const prompt = `Gruppiere diese französischen Wörter intelligent in thematisch zusammenhängende Gruppen mit 2-5 Wörtern pro Gruppe. Verwende nur die französischen Wörter wie unten angegeben:
@@ -71,38 +87,11 @@ Beispiel:
 Jetzt deine Antwort mit der obigen Liste:`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 512,
-      }),
-    })
-
-    if (!res.ok) {
-      let errorMsg = res.statusText
-      try {
-        const errorData = await res.json()
-        errorMsg = errorData.error?.message || errorMsg
-      } catch {}
-      throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
-    }
-
-    const data = await res.json()
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error('Groq: Ungültige Antwortstruktur')
-    }
-    const cleanedContent = cleanJSON(data.choices[0].message.content)
-    const parsed = JSON.parse(cleanedContent)
+    const content = await llmChat(prompt, { maxTokens: 512, temperature: 0.7 })
+    const parsed = JSON.parse(cleanJSON(content))
     return parsed.groups
   } catch (err) {
-    if (err.message.startsWith('Groq:')) {
+    if (err.message.startsWith('Groq:') || err.message.startsWith('LLM:')) {
       throw err
     }
     if (err instanceof SyntaxError) {
@@ -113,9 +102,6 @@ Jetzt deine Antwort mit der obigen Liste:`
 }
 
 export async function generateBatch(words) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
   const prompt = `Schreibe eine kurze, zusammenhängende Geschichte oder Szene auf Französisch mit diesen Wörtern:
@@ -136,42 +122,15 @@ Beispiel JSON Format:
 Jetzt deine Antwort:`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
-    })
-
-    if (!res.ok) {
-      let errorMsg = res.statusText
-      try {
-        const errorData = await res.json()
-        errorMsg = errorData.error?.message || errorMsg
-      } catch {}
-      throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
-    }
-
-    const data = await res.json()
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error('Groq: Ungültige Antwortstruktur')
-    }
-    const cleanedContent = cleanJSON(data.choices[0].message.content)
-    const parsed = JSON.parse(cleanedContent)
+    const content = await llmChat(prompt, { maxTokens: 1500, temperature: 0.7 })
+    const parsed = JSON.parse(cleanJSON(content))
     // Sicherheits-Deckel: französischer Text max 800 Zeichen (Kostenbegrenzung TTS)
     if (parsed && typeof parsed.french === 'string') {
       parsed.french = capText(parsed.french, 800)
     }
     return parsed
   } catch (err) {
-    if (err.message.startsWith('Groq:')) {
+    if (err.message.startsWith('Groq:') || err.message.startsWith('LLM:')) {
       throw err
     }
     if (err instanceof SyntaxError) {
@@ -186,9 +145,6 @@ Jetzt deine Antwort:`
 // Für jede Lücke: exakte Form (answer), deutsche Bedeutung (de), Grundform (base),
 // ob die Form von der Grundform abweicht (changed) + kurze deutsche Erklärung (note).
 export async function generateCloze(words) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
   const prompt = `Schreibe eine kurze zusammenhängende Erzählung auf Französisch – eine kleine Szene oder Geschichte mit Anfang, Mitte und Ende – mit diesen Lernwörtern:
@@ -291,9 +247,6 @@ function grBaseKey(s) {
 // opts: { verbs:[{french,german}], forms:[{name}], parts:number }
 // return: { title, runs:[{ title, text, blanks:[{n,answer,de,base,tense,person,reason,note}] }] }
 export async function generateGrammarStory(opts) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
   const { verbs = [], forms = [], parts: numParts = 7, knownForms = null } = opts || {}
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
@@ -464,9 +417,6 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
 // opts: { form:{name}, verbs:[{french,german}] }
 // return: [{ verb, german, label, forms:{1sg..3pl}, endings:null }]
 export async function conjugateVerbs(opts) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
   const { form, verbs = [] } = opts || {}
   const tenseName = String(form?.name || '').trim()
   const isImperatif = /imp[ée]ratif/i.test(tenseName) || form?.id === 'imperatif'
@@ -543,9 +493,6 @@ export function personLabel(code) {
 }
 
 export async function segmentTranscript(transcript, durationSec) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
 
   // Transkript als Zeilen "[Sekunde] Text" (begrenzt, um Kontext klein zu halten)
   let lines = transcript.map(t => `[${Math.round(t.start)}] ${t.text}`)
@@ -577,34 +524,8 @@ Transkript:
 ${joined}`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.5,
-        max_tokens: 2048,
-      }),
-    })
-
-    if (!res.ok) {
-      let errorMsg = res.statusText
-      try {
-        const errorData = await res.json()
-        errorMsg = errorData.error?.message || errorMsg
-      } catch {}
-      throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
-    }
-
-    const data = await res.json()
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error('Groq: Ungültige Antwortstruktur')
-    }
-    const parsed = JSON.parse(cleanJSON(data.choices[0].message.content))
+    const content = await llmChat(prompt, { maxTokens: 2048, temperature: 0.5 })
+    const parsed = JSON.parse(cleanJSON(content))
     const segments = (parsed.segments || [])
       .filter(s => typeof s.start === 'number' && typeof s.end === 'number' && s.end > s.start)
       .map(s => ({
@@ -616,53 +537,23 @@ ${joined}`
     if (segments.length === 0) throw new Error('Groq: Keine Abschnitte erzeugt')
     return segments
   } catch (err) {
-    if (err.message.startsWith('Groq:')) throw err
+    if (err.message.startsWith('Groq:') || err.message.startsWith('LLM:')) throw err
     if (err instanceof SyntaxError) throw new Error('Groq: Ungültige JSON-Antwort')
     throw new Error(`Groq: Netzwerkfehler - ${err.message}`)
   }
 }
 
 export async function generateSentence(word1, word2) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
 
   const prompt = word2
     ? `Schreibe einen kurzen zusammenhängenden französischen Text (2-5 Sätze) in dem die Wörter "${word1.french}" (= ${word1.german}) und "${word2.french}" (= ${word2.german}) natürlich vorkommen. Die Wörter müssen nicht im gleichen Satz sein. Antworte NUR mit JSON: {"french": "...", "german": "..."}`
     : `Schreibe einen kurzen zusammenhängenden französischen Text (2-5 Sätze) in dem das Wort "${word1.french}" (= ${word1.german}) natürlich vorkommt. Antworte NUR mit JSON: {"french": "...", "german": "..."}`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 256,
-      }),
-    })
-
-    if (!res.ok) {
-      let errorMsg = res.statusText
-      try {
-        const errorData = await res.json()
-        errorMsg = errorData.error?.message || errorMsg
-      } catch {}
-      throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
-    }
-
-    const data = await res.json()
-    if (!data?.choices?.[0]?.message?.content) {
-      throw new Error('Groq: Ungültige Antwortstruktur')
-    }
-    const cleanedContent = cleanJSON(data.choices[0].message.content)
-    return JSON.parse(cleanedContent)
+    const content = await llmChat(prompt, { maxTokens: 256, temperature: 0.7 })
+    return JSON.parse(cleanJSON(content))
   } catch (err) {
-    if (err.message.startsWith('Groq:')) {
+    if (err.message.startsWith('Groq:') || err.message.startsWith('LLM:')) {
       throw err
     }
     if (err instanceof SyntaxError) {
@@ -674,31 +565,8 @@ export async function generateSentence(word1, word2) {
 
 // ---- Gemeinsamer Groq-Aufruf (für Hörübung) ----
 async function callGroq(prompt, { maxTokens = 1024, temperature = 0.5 } = {}) {
-  if (!import.meta.env.VITE_GROQ_API_KEY) {
-    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
-  }
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  })
-  if (!res.ok) {
-    let errorMsg = res.statusText
-    try { const e = await res.json(); errorMsg = e.error?.message || errorMsg } catch {}
-    throw new Error(`Groq: ${errorMsg} (Status ${res.status})`)
-  }
-  const data = await res.json()
-  const content = data?.choices?.[0]?.message?.content
-  if (!content) throw new Error('Groq: Ungültige Antwortstruktur')
-  return content
+  // Läuft jetzt über den LLM-Proxy (Edge Function). Name bleibt aus Kompatibilität.
+  return llmChat(prompt, { maxTokens, temperature })
 }
 
 function parseGroqJSON(content) {
