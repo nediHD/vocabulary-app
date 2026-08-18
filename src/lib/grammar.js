@@ -232,6 +232,85 @@ export const GRAMMAR = [
   },
 ]
 
+// ---- Grammatik üben: konjugierte Formen ----
+
+// Pädagogische Lern-Reihenfolge der 13 konjugierten Zeitformen/Modi (topic-id).
+// Jede Form baut auf den vorherigen auf (einfache Zeiten vor zusammengesetzten):
+// die zusammengesetzten Zeiten brauchen eine schon gelernte einfache Zeit des
+// Hilfsverbs. So wird nie eine Form geübt, deren Bausteine noch fehlen.
+export const FORM_ORDER = [
+  'present',              // 1  Fundament – Basis für fast alles
+  'imperatif',            // 2  direkt aus dem Présent
+  'passe-compose',        // 3  Présent (avoir/être) + Partizip
+  'imparfait',            // 4  nous-Form des Présent
+  'plus-que-parfait',     // 5  Imparfait (Hilfsverb) + Partizip
+  'futur-proche',         // 6  aller + Infinitiv
+  'futur-simple',         // 7  Infinitiv-Stamm + Endungen
+  'futur-anterieur',      // 8  Futur (Hilfsverb) + Partizip
+  'conditionnel-present', // 9  Futur-Stamm + Imparfait-Endungen
+  'conditionnel-passe',   // 10 Conditionnel (Hilfsverb) + Partizip
+  'subjonctif-present',   // 11 ils-Form des Présent
+  'subjonctif-passe',     // 12 Subjonctif (Hilfsverb) + Partizip
+  'passe-simple',         // 13 literarisch – nur erkennen, zuletzt
+]
+
+// Drill-Pool: die 30 häufigsten unregelmäßigen französischen Verben.
+// Pro Übungsrunde werden 3 davon zufällig gezogen, komplett durchkonjugiert
+// und tauchen zusätzlich im Lückentext auf.
+export const IRREGULAR_VERBS = [
+  { french: 'être', german: 'sein' },
+  { french: 'avoir', german: 'haben' },
+  { french: 'aller', german: 'gehen' },
+  { french: 'faire', german: 'machen' },
+  { french: 'dire', german: 'sagen' },
+  { french: 'pouvoir', german: 'können' },
+  { french: 'vouloir', german: 'wollen' },
+  { french: 'devoir', german: 'müssen' },
+  { french: 'savoir', german: 'wissen' },
+  { french: 'venir', german: 'kommen' },
+  { french: 'prendre', german: 'nehmen' },
+  { french: 'voir', german: 'sehen' },
+  { french: 'mettre', german: 'legen/setzen' },
+  { french: 'tenir', german: 'halten' },
+  { french: 'falloir', german: 'müssen (il faut)' },
+  { french: 'connaître', german: 'kennen' },
+  { french: 'partir', german: 'abfahren' },
+  { french: 'sortir', german: 'hinausgehen' },
+  { french: 'dormir', german: 'schlafen' },
+  { french: 'boire', german: 'trinken' },
+  { french: 'croire', german: 'glauben' },
+  { french: 'lire', german: 'lesen' },
+  { french: 'écrire', german: 'schreiben' },
+  { french: 'vivre', german: 'leben' },
+  { french: 'suivre', german: 'folgen' },
+  { french: 'recevoir', german: 'bekommen' },
+  { french: 'devenir', german: 'werden' },
+  { french: 'ouvrir', german: 'öffnen' },
+  { french: 'courir', german: 'rennen' },
+  { french: 'mourir', german: 'sterben' },
+]
+
+// Alle konjugierten Verb-Formen (style 'form' aus den Gruppen Zeiten + Modi),
+// als { key, id, name }.
+export function verbFormList() {
+  const sec = GRAMMAR.find(s => s.id === 'verben')
+  if (!sec) return []
+  const out = []
+  for (const g of sec.groups) {
+    if (g.id !== 'zeiten-indikativ' && g.id !== 'modi') continue
+    for (const t of g.topics) {
+      if (t.style === 'form') out.push({ key: `${sec.id}/${g.id}/${t.id}`, id: t.id, name: t.name })
+    }
+  }
+  return out
+}
+
+// Dieselben Formen, aber in der pädagogischen Lern-Reihenfolge (FORM_ORDER).
+export function orderedForms() {
+  const byId = new Map(verbFormList().map(f => [f.id, f]))
+  return FORM_ORDER.map(id => byId.get(id)).filter(Boolean)
+}
+
 // Flache Liste aller Themen mit ihrem Pfad (für Cache-Keys & Prompt-Kontext).
 export function topicPath(sectionId, groupId, topicId) {
   const s = GRAMMAR.find(x => x.id === sectionId)

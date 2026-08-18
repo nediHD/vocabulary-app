@@ -273,78 +273,104 @@ function grBaseKey(s) {
   return (s || '').toString().toLowerCase().trim().replace(/^s['’]?\s*/, '').replace(/^se\s+/, '').trim()
 }
 
-// Erzeugt die GESAMTE Session-Geschichte auf einmal (Durchlauf 1), konjugiert dann
-// alle Ziel-Verben in einem zweiten Durchlauf, und baut daraus die Runs (Abschnitte).
+// Erzeugt die GESAMTE Session-Geschichte auf einmal (Durchlauf 1) MIT bereits
+// eingesetzten Lücken {{n}}, verifiziert/korrigiert dann alle Formen in weiteren
+// Durchläufen, und baut daraus die Runs (Abschnitte).
+//
+// Anders als früher schreibt das Modell die Platzhalter {{1}}, {{2}} … DIREKT in
+// den Text (wie bei generateCloze). Dadurch können keine Lücken mehr verloren
+// gehen, weil kein fehleranfälliges „Verbform im Text wiederfinden und ersetzen"
+// mehr nötig ist – die Lücke steht schon dort, wo das Modell sie gesetzt hat.
+//
 // opts: { verbs:[{french,german}], forms:[{name}], parts:number }
 // return: { title, runs:[{ title, text, blanks:[{n,answer,de,base,tense,person,reason,note}] }] }
 export async function generateGrammarStory(opts) {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
     throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
   }
-  const { verbs = [], forms = [], parts: numParts = 7 } = opts || {}
+  const { verbs = [], forms = [], parts: numParts = 7, knownForms = null } = opts || {}
   const verbList = verbs.map(v => `"${v.french}" (${v.german})`).join(', ')
   const tenseNames = forms.map(f => f.name)
   const tenseList = tenseNames.join(' UND ')
   const allowed = new Set(verbs.map(v => grBaseKey(v.french)))
+  const deByBase = new Map(verbs.map(v => [grBaseKey(v.french), v.german]))
 
-  // ---------- DURCHLAUF 1: GANZE Geschichte in ${numParts} Abschnitten ----------
+  // ---------- DURCHLAUF 1: GANZE Geschichte MIT Lücken in ${numParts} Abschnitten ----------
   const prompt1 = `Schreibe EINE zusammenhängende französische Geschichte in GENAU ${numParts} Abschnitten (Teil 1 bis ${numParts}). Die Abschnitte bilden EINE durchgehende Geschichte mit Anfang, Entwicklung und Ende – sie bauen aufeinander auf und WIEDERHOLEN sich NICHT (keine Szene, kein Satz und kein Motiv doppelt). Jeder Abschnitt setzt den vorherigen fort.
 
 ZU ÜBENDE VERBEN – jedes muss über die GESAMTE Geschichte mindestens einmal vorkommen (Grundform/Infinitiv): ${verbList}
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
+LÄNGE: Jeder Abschnitt hat 4–6 vollständige Sätze (ausführlich, nicht nur ein paar Wörter). Die ganze Geschichte soll dadurch schön lang werden.
+
+WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 3–5 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 3 Platzhalter (Lücken) enthalten – lieber ein Ziel-Verb ein zweites Mal einbauen, als unter 3 Lücken zu bleiben. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
+
+PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
+
 REGELN:
-- Jeder Abschnitt: nur EIN PAAR Sätze (ca. 2–4 Sätze).
-- Verteile die zu übenden Verben über die Abschnitte, sodass am Ende ALLE mindestens einmal vorkommen. Nicht jeder Satz braucht ein Ziel-Verb; baue auch verbindende Erzählsätze ein.
-- Jedes Vorkommen eines zu übenden Verbs ist in EINER der 2 Zeitformen (${tenseList}) konjugiert.
+- Jedes Vorkommen eines Ziel-Verbs ist in EINER der 2 Zeitformen (${tenseList}) konjugiert.
+- Verteile die Verben so, dass über die ganze Geschichte ALLE mindestens einmal vorkommen.
 - Decke über die ganze Geschichte möglichst viele grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nutze auch Dialog/Ansprache.
 - Wähle Kontexte, die die Zeitform motivieren (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
-- Schreibe NORMALEN Text – KEINE Platzhalter, KEINE Lücken.
 
-Gib für JEDEN Abschnitt "text" (die Sätze) und "targets" (nur für die ZU ÜBENDEN Verben, die in diesem Abschnitt vorkommen) mit:
+Gib für JEDEN Abschnitt "text" (mit den {{n}}-Lücken) und "blanks" (ein Eintrag pro Platzhalter) mit:
+- "n": Nummer des Platzhalters in DIESEM Abschnitt (passend zu {{n}} im text)
+- "answer": die EXAKTE konjugierte Form, die in die Lücke gehört. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"), Futur proche = "aller+Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m'/te/le/lui …), OHNE Adverbien (déjà, souvent …).
 - "base": Infinitiv (aus der Liste)
 - "de": deutsche Bedeutung (aus der Liste)
 - "tense": genau eine der 2 Zeitformen (${tenseNames.map(n => `"${n}"`).join(', ')})
 - "person": Code aus dem Subjekt – "1sg","2sg","3sg","1pl","2pl","3pl"
-- "verb_surface": der EXAKTE, zusammenhängende konjugierte Verbteil, GENAU so wie er im "text" dieses Abschnitts steht (muss als Teilstring vorkommen). NUR das Verb: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"), Futur proche = "aller+Infinitiv" (z. B. "vais ballotter"). OHNE vorangestelltes Pronomen (se/s'/m'/te/le/lui …) und OHNE Adverbien (déjà, souvent …). Setze KEIN Adverb zwischen Hilfsverb und Partizip.
-- "sentence": der Satz, in dem das Verb steht.
+- "sentence": der ganze Satz, in dem die Lücke steht – aber MIT dem Verb im Klartext (statt Platzhalter), als Kontext.
 
 WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR mit gültigem JSON ohne Markdown:
-{"title":"...","parts":[{"text":"...","targets":[{"base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","verb_surface":"se tortillait","sentence":"..."}]}]}`
+{"title":"...","parts":[{"text":"Ce matin-là, Paul se {{1}} très tôt et {{2}} un café en pensant à la journée; il savait qu'il {{3}} rester calme.","blanks":[{"n":1,"answer":"tortillait","base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","sentence":"Ce matin-là, Paul se tortillait, incapable de rester en place."},{"n":2,"answer":"but","base":"boire","de":"trinken","tense":"Passé simple","person":"3sg","sentence":"Il but un café en pensant à la journée."},{"n":3,"answer":"devait","base":"devoir","de":"müssen","tense":"Imparfait","person":"3sg","sentence":"Il savait qu'il devait rester calme."}]}]}`
 
   let s
-  try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 5000, temperature: 0.6 })) }
-  catch { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 5000, temperature: 0.4 })) }
+  try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 6000, temperature: 0.6 })) }
+  catch { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 6000, temperature: 0.4 })) }
 
   const title = String(s?.title || '').trim()
   const parts = (Array.isArray(s?.parts) ? s.parts : [])
-    .map(p => ({
-      text: String(p?.text || ''),
-      targets: (Array.isArray(p?.targets) ? p.targets : [])
-        .map(t => ({
-          base: String(t.base || '').trim(),
-          de: String(t.de || '').trim(),
-          tense: String(t.tense || '').trim(),
-          person: String(t.person || '').trim(),
-          surface: String(t.verb_surface || '').trim(),
-          sentence: String(t.sentence || '').trim(),
+    .map(p => {
+      let text = String(p?.text || '')
+      // Nur Lücken behalten, deren Verb wir üben UND deren Platzhalter wirklich im Text steht.
+      const seen = new Set()
+      const blanks = (Array.isArray(p?.blanks) ? p.blanks : [])
+        .map(b => ({
+          n: Number(b.n),
+          answer: String(b.answer || '').trim(),
+          de: String(b.de || '').trim(),
+          base: String(b.base || '').trim(),
+          tense: String(b.tense || '').trim(),
+          person: String(b.person || '').trim(),
+          sentence: String(b.sentence || '').trim(),
         }))
-        .filter(t => t.base && t.surface && allowed.has(grBaseKey(t.base))),
-    }))
+        .filter(b => {
+          if (!Number.isInteger(b.n) || seen.has(b.n)) return false
+          if (!b.base || !allowed.has(grBaseKey(b.base))) return false
+          if (!text.includes(`{{${b.n}}}`)) return false
+          seen.add(b.n)
+          return true
+        })
+      // Verwaiste Platzhalter (ohne passende Lücke) aus dem Text entfernen, damit
+      // keine unausfüllbaren „____" stehen bleiben.
+      text = text.replace(/\{\{(\d+)\}\}/g, (m, d) => (seen.has(Number(d)) ? m : '')).replace(/[ \t]{2,}/g, ' ').trim()
+      return { text, blanks }
+    })
     .filter(p => p.text)
   if (parts.length === 0) throw new Error('Groq: Keine Geschichte erzeugt')
 
-  // ---------- DURCHLAUF 2: alle Ziel-Verben korrekt konjugieren + Begründung ----------
+  // ---------- DURCHLAUF 2: alle Lücken korrekt konjugieren + Begründung ----------
   const flat = []
-  parts.forEach((p, pi) => p.targets.forEach((t, ti) => { if (p.text.includes(t.surface)) flat.push({ pi, ti, ...t }) }))
+  parts.forEach((p, pi) => p.blanks.forEach((b, bi) => flat.push({ pi, bi, ...b })))
+  if (flat.length === 0) throw new Error('Groq: Keine Lücken erzeugt')
 
-  if (flat.length) {
-    const listStr = flat.map((t, i) =>
-      `${i + 1}. Verb (Infinitiv): "${t.base}" | Zeitform: "${t.tense}" | Person: "${PERSON_LABEL[t.person] || t.person}" | Kontextsatz: "${t.sentence}"`
-    ).join('\n')
+  const listStr = flat.map((t, i) =>
+    `${i + 1}. Verb (Infinitiv): "${t.base}" | Zeitform: "${t.tense}" | Person: "${PERSON_LABEL[t.person] || t.person}" | Kontextsatz: "${t.sentence}"`
+  ).join('\n')
 
-    const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
+  const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
 
 ${listStr}
 
@@ -356,25 +382,25 @@ Für jeden Eintrag (gleiche Reihenfolge, gleiche Anzahl) gib zurück:
 Antworte NUR mit gültigem JSON ohne Markdown:
 {"answers":[{"answer":"...","reason":"...","note":"..."}]}`
 
-    let a
-    try { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.25 })) }
-    catch { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.2 })) }
-    const answers = Array.isArray(a?.answers) ? a.answers : []
-    flat.forEach((f, k) => {
-      const ans = answers[k] || {}
-      const t = parts[f.pi].targets[f.ti]
-      t._answer = String(ans.answer || '').trim()
-      t._reason = String(ans.reason || '').trim()
-      t._note = String(ans.note || '').trim()
-    })
+  let a
+  try { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.25 })) }
+  catch { a = parseGroqJSON(await callGroq(prompt2, { maxTokens: 2800, temperature: 0.2 })) }
+  const answers = Array.isArray(a?.answers) ? a.answers : []
+  flat.forEach((f, k) => {
+    const ans = answers[k] || {}
+    const b = parts[f.pi].blanks[f.bi]
+    b._answer = String(ans.answer || '').trim()
+    b._reason = String(ans.reason || '').trim()
+    b._note = String(ans.note || '').trim()
+  })
 
-    // ---------- DURCHLAUF 3: unabhängige Verifikation/Korrektur der Formen ----------
-    const verifyList = flat.map((t, i) => {
-      const cur = parts[t.pi].targets[t.ti]._answer || ''
-      return `${i + 1}. Verb (Infinitiv) "${t.base}" | Zeitform "${t.tense}" | Person "${PERSON_LABEL[t.person] || t.person}" | vorgeschlagene Form: "${cur}"`
-    }).join('\n')
+  // ---------- DURCHLAUF 3: unabhängige Verifikation/Korrektur der Formen ----------
+  const verifyList = flat.map((t, i) => {
+    const cur = parts[t.pi].blanks[t.bi]._answer || t.answer || ''
+    return `${i + 1}. Verb (Infinitiv) "${t.base}" | Zeitform "${t.tense}" | Person "${PERSON_LABEL[t.person] || t.person}" | vorgeschlagene Form: "${cur}"`
+  }).join('\n')
 
-    const promptV = `Du bist ein strenger Französisch-Grammatik-Prüfer. Prüfe für JEDEN Eintrag, ob die vorgeschlagene Form die KORREKTE Konjugation von GENAU diesem Verb (base) in der angegebenen Zeitform + Person ist. Konjugiere niemals ein anderes Verb.
+  const promptV = `Du bist ein strenger Französisch-Grammatik-Prüfer. Prüfe für JEDEN Eintrag, ob die vorgeschlagene Form die KORREKTE Konjugation von GENAU diesem Verb (base) in der angegebenen Zeitform + Person ist. Konjugiere niemals ein anderes Verb.
 
 ${verifyList}
 
@@ -383,43 +409,126 @@ Gib pro Eintrag die KORREKTE Form zurück – ist die vorgeschlagene bereits ric
 Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wie oben:
 {"checked":["Form 1","Form 2","..."]}`
 
-    try {
-      const v = parseGroqJSON(await callGroq(promptV, { maxTokens: 2000, temperature: 0.1 }))
-      const checked = Array.isArray(v?.checked) ? v.checked : []
-      flat.forEach((f, k) => {
-        const corr = String(checked[k] || '').trim()
-        if (corr) parts[f.pi].targets[f.ti]._answer = corr
-      })
-    } catch { /* Verifikation optional: bei Fehler bleiben die Formen aus Durchlauf 2 */ }
+  try {
+    const v = parseGroqJSON(await callGroq(promptV, { maxTokens: 2000, temperature: 0.1 }))
+    const checked = Array.isArray(v?.checked) ? v.checked : []
+    flat.forEach((f, k) => {
+      const corr = String(checked[k] || '').trim()
+      if (corr) parts[f.pi].blanks[f.bi]._answer = corr
+    })
+  } catch { /* Verifikation optional: bei Fehler bleiben die Formen aus Durchlauf 2 */ }
+
+  // ---------- Bekannte Formen erzwingen (Konsistenz mit dem Konjugations-Drill) ----------
+  // Die 3 unregelmäßigen Verben wurden bereits separat (mit Verifikation) durchkonjugiert.
+  // Steht für eine Lücke die exakte Form aus dieser Tabelle bereit, hat sie Vorrang vor
+  // den vom Story-Durchlauf erzeugten Formen – so stimmen Drill und Lückentext überein.
+  if (knownForms) {
+    flat.forEach((f) => {
+      const b = parts[f.pi].blanks[f.bi]
+      const kf = knownForms[grBaseKey(b.base)]
+      const forced = kf && kf[b.person]
+      if (forced) b._answer = forced
+    })
   }
 
-  // ---------- DURCHLAUF 4 (Code): Lücken pro Abschnitt einsetzen ----------
-  const runs = parts.map(p => {
-    let text = p.text
-    const order = p.targets.map((_, ti) => ti).sort((x, y) => p.targets[y].surface.length - p.targets[x].surface.length)
-    const blanks = []
-    let n = 0
-    for (const ti of order) {
-      const t = p.targets[ti]
-      if (!text.includes(t.surface)) continue
-      n += 1
-      text = text.replace(t.surface, `{{${n}}}`)
-      blanks.push({
-        n,
-        answer: t._answer || t.surface,
-        de: t.de,
-        base: t.base,
-        tense: t.tense,
-        person: t.person,
-        reason: t._reason || '',
-        note: t._note || `${t.tense}, ${PERSON_LABEL[t.person] || ''} von ${t.base}`,
-      })
-    }
-    return { title, text, blanks }
-  }).filter(r => r.text)
+  // ---------- Runs bauen (Platzhalter stehen schon im Text) ----------
+  const runs = parts.map(p => ({
+    title,
+    text: p.text,
+    blanks: p.blanks.map(b => ({
+      n: b.n,
+      answer: b._answer || b.answer || b.base,
+      de: b.de || deByBase.get(grBaseKey(b.base)) || '',
+      base: b.base,
+      tense: b.tense,
+      person: b.person,
+      reason: b._reason || '',
+      note: b._note || `${b.tense}, ${PERSON_LABEL[b.person] || ''} von ${b.base}`,
+    })),
+  })).filter(r => r.text)
 
   if (runs.length === 0) throw new Error('Groq: Keine Runs erzeugt')
   return { title, runs }
+}
+
+// ---- Volle Konjugation mehrerer Verben in EINER Zeitform (für den Drill) ----
+// Konjugiert jedes übergebene Verb in allen 6 Personen der Zielform, mit einem
+// zweiten Verifikations-Durchlauf. Für den Impératif gibt es nur tu/nous/vous.
+//
+// opts: { form:{name}, verbs:[{french,german}] }
+// return: [{ verb, german, label, forms:{1sg..3pl}, endings:null }]
+export async function conjugateVerbs(opts) {
+  if (!import.meta.env.VITE_GROQ_API_KEY) {
+    throw new Error('Groq: API Key nicht gesetzt (VITE_GROQ_API_KEY)')
+  }
+  const { form, verbs = [] } = opts || {}
+  const tenseName = String(form?.name || '').trim()
+  const isImperatif = /imp[ée]ratif/i.test(tenseName) || form?.id === 'imperatif'
+  if (verbs.length === 0) return []
+
+  const persons = isImperatif ? ['2sg', '1pl', '2pl'] : ['1sg', '2sg', '3sg', '1pl', '2pl', '3pl']
+  const personHint = isImperatif
+    ? 'Der Impératif hat NUR die Formen 2sg (tu), 1pl (nous), 2pl (vous) – OHNE Subjektpronomen. Für 1sg, 3sg und 3pl gib null.'
+    : 'Alle sechs Personen: 1sg (je), 2sg (tu), 3sg (il/elle), 1pl (nous), 2pl (vous), 3pl (ils/elles).'
+  const infList = verbs.map((v, i) => `${i + 1}. "${v.french}" (${v.german})`).join('\n')
+
+  const prompt = `Du bist Französisch-Grammatik-Experte. Konjugiere JEDES der folgenden Verben vollständig in der Zeitform/dem Modus "${tenseName}".
+
+${infList}
+
+${personHint}
+
+REGELN für jede Form (nur der Verbteil):
+- Zusammengesetzte Zeiten = Hilfsverb + Partizip zusammen (z. B. "ai pris", "était venu").
+- Futur proche = "aller"(konjugiert) + Infinitiv (z. B. "vais prendre").
+- KEINE Subjektpronomen (je/tu/il …), KEINE Reflexivpronomen, KEINE Adverbien.
+- Konjugiere GENAU das angegebene Verb, niemals ein anderes.
+
+Antworte NUR mit gültigem JSON ohne Markdown, gleiche Reihenfolge und Anzahl wie oben:
+{"verbs":[{"infinitif":"prendre","forms":{"1sg":"...","2sg":"...","3sg":"...","1pl":"...","2pl":"...","3pl":"..."}}]}`
+
+  let gen
+  try { gen = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.2 })) }
+  catch { gen = parseGroqJSON(await callGroq(prompt, { maxTokens: 2200, temperature: 0.1 })) }
+  const genVerbs = Array.isArray(gen?.verbs) ? gen.verbs : []
+
+  const pick = (obj, p) => {
+    const v = obj && obj[p]
+    if (v == null) return null
+    const s = String(v).trim()
+    return s && s.toLowerCase() !== 'null' ? s : null
+  }
+  const rows = verbs.map((v, i) => {
+    const src = genVerbs[i]?.forms || {}
+    const forms = {}
+    for (const p of persons) { const f = pick(src, p); if (f) forms[p] = f }
+    return { verb: v.french, german: v.german, label: 'unregelmäßig', forms, endings: null }
+  })
+
+  // ---- Verifikations-Durchlauf: jede Einzelform prüfen/korrigieren ----
+  const flat = []
+  rows.forEach((r, ri) => persons.forEach(p => { if (r.forms[p]) flat.push({ ri, p, verb: r.verb, form: r.forms[p] }) }))
+  if (flat.length) {
+    const vList = flat.map((t, i) =>
+      `${i + 1}. Verb "${t.verb}" | Zeitform "${tenseName}" | Person "${PERSON_LABEL[t.p] || t.p}" | vorgeschlagen: "${t.form}"`
+    ).join('\n')
+    const promptV = `Du bist ein strenger Französisch-Grammatik-Prüfer. Prüfe für JEDEN Eintrag, ob die vorgeschlagene Form die KORREKTE Konjugation von GENAU diesem Verb in der angegebenen Zeitform + Person ist. Nur der Verbteil (zusammengesetzte Zeiten: Hilfsverb+Partizip; Futur proche: aller+Infinitiv), OHNE Pronomen, OHNE Adverbien. Ist sie richtig, gib sie unverändert zurück; ist sie falsch, gib die korrigierte Form.
+
+${vList}
+
+Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl:
+{"checked":["Form 1","Form 2","..."]}`
+    try {
+      const v = parseGroqJSON(await callGroq(promptV, { maxTokens: 1600, temperature: 0.1 }))
+      const checked = Array.isArray(v?.checked) ? v.checked : []
+      flat.forEach((t, k) => {
+        const corr = String(checked[k] || '').trim()
+        if (corr) rows[t.ri].forms[t.p] = corr
+      })
+    } catch { /* Verifikation optional */ }
+  }
+
+  return rows.filter(r => Object.keys(r.forms).length > 0)
 }
 
 // Personencode → gut lesbares deutsches Label (für das Hinweis-Popup)
@@ -1066,3 +1175,4 @@ Antwort des Lerners: "${String(userAnswer || '(leer)')}"
 Erkläre auf DEUTSCH in 2–3 kurzen Sätzen: WANN/WO man die richtige Form benutzt (welche Situation, welcher Auslöser oder welches Signalwort sie verlangt), WARUM sie hier stimmt und warum die Form des Lerners hier NICHT passt. Konkret auf diesen Satz bezogen, nicht nur allgemein die Endung nennen.`
   return String(await callGroq(p, { maxTokens: 260, temperature: 0.3 })).trim()
 }
+
