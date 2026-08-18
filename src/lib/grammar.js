@@ -290,6 +290,51 @@ export const IRREGULAR_VERBS = [
   { french: 'mourir', german: 'sterben' },
 ]
 
+// Regelmäßige Verben zum Endungen-Üben, nach Endungs-Gruppe.
+// Pro Runde wird je 1 Verb pro Gruppe gezogen (zusätzlich zu den 3 Unregelmäßigen).
+// 1. Gruppe: -er (regelmäßig, ohne Stamm-Wechsel)
+export const REGULAR_ER = [
+  { french: 'parler', german: 'sprechen' },
+  { french: 'aimer', german: 'lieben/mögen' },
+  { french: 'regarder', german: 'anschauen' },
+  { french: 'habiter', german: 'wohnen' },
+  { french: 'travailler', german: 'arbeiten' },
+  { french: 'chercher', german: 'suchen' },
+  { french: 'donner', german: 'geben' },
+  { french: 'écouter', german: 'zuhören' },
+  { french: 'jouer', german: 'spielen' },
+  { french: 'chanter', german: 'singen' },
+  { french: 'danser', german: 'tanzen' },
+  { french: 'trouver', german: 'finden' },
+  { french: 'demander', german: 'fragen' },
+  { french: 'rester', german: 'bleiben' },
+  { french: 'penser', german: 'denken' },
+]
+// 2. Gruppe: -ir (regelmäßig, mit -iss- wie finir)
+export const REGULAR_IR = [
+  { french: 'finir', german: 'beenden' },
+  { french: 'choisir', german: 'wählen' },
+  { french: 'réussir', german: 'schaffen/gelingen' },
+  { french: 'grandir', german: 'wachsen' },
+  { french: 'réfléchir', german: 'nachdenken' },
+  { french: 'remplir', german: 'füllen' },
+  { french: 'obéir', german: 'gehorchen' },
+  { french: 'applaudir', german: 'applaudieren' },
+  { french: 'guérir', german: 'heilen' },
+  { french: 'punir', german: 'bestrafen' },
+]
+// 3. Gruppe: -re (regelmäßiges Muster wie vendre) – „andere Endung"
+export const REGULAR_RE = [
+  { french: 'vendre', german: 'verkaufen' },
+  { french: 'attendre', german: 'warten' },
+  { french: 'répondre', german: 'antworten' },
+  { french: 'perdre', german: 'verlieren' },
+  { french: 'entendre', german: 'hören' },
+  { french: 'descendre', german: 'hinuntergehen' },
+  { french: 'rendre', german: 'zurückgeben' },
+  { french: 'défendre', german: 'verteidigen' },
+]
+
 // Alle konjugierten Verb-Formen (style 'form' aus den Gruppen Zeiten + Modi),
 // als { key, id, name }.
 export function verbFormList() {

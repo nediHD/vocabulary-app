@@ -458,7 +458,7 @@ Antworte NUR mit gültigem JSON ohne Markdown, gleiche Reihenfolge und Anzahl wi
     const src = genVerbs[i]?.forms || {}
     const forms = {}
     for (const p of persons) { const f = pick(src, p); if (f) forms[p] = f }
-    return { verb: v.french, german: v.german, label: 'unregelmäßig', forms, endings: null }
+    return { verb: v.french, german: v.german, label: v.label || 'unregelmäßig', forms, endings: null }
   })
 
   // ---- Verifikations-Durchlauf: jede Einzelform prüfen/korrigieren ----

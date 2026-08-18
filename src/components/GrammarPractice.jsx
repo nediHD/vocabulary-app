@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { orderedForms, IRREGULAR_VERBS } from '../lib/grammar'
+import { orderedForms, IRREGULAR_VERBS, REGULAR_ER, REGULAR_IR, REGULAR_RE } from '../lib/grammar'
 import { generateGrammarStory, conjugateVerbs, personLabel } from '../lib/groq'
 import { Explanation, useTheory } from './Grammar'
 
@@ -92,8 +92,8 @@ function ConjugationDrill({ tenseId, tenseName, rows }) {
   return (
     <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
       <button onClick={() => setOpen(o => !o)} className="flex w-full items-center gap-2 text-left">
-        <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Unregelmäßige üben</span>
-        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>3 Verben in {tenseName} durchkonjugieren</span>
+        <span className="font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--blue-dark)' }}>Endungen üben</span>
+        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--ink)' }}>{rows.length} Verben in {tenseName} durchkonjugieren</span>
         <span className="text-sm font-medium" style={{ color: 'var(--blue)' }}>{open ? 'ausblenden ▴' : 'öffnen ▾'}</span>
       </button>
 
@@ -268,8 +268,18 @@ export default function GrammarPractice({ setView, setInSession }) {
       const { data: progressRows } = await supabase.from('form_progress').select('*')
       const target = pickTargetForm(orderedForms(), progressRows || [])
 
-      // 3 unregelmäßige Verben ziehen.
+      // Drill-Verben ziehen: je 1 regelmäßiges pro Endungs-Gruppe (-er, -ir, -re)
+      // zum Endungen-Üben + immer 3 unregelmäßige.
       const irregulars = pickN(IRREGULAR_VERBS, NUM_IRREGULAR)
+      const regulars = [
+        { ...pickN(REGULAR_ER, 1)[0], label: '-er (regelmäßig)' },
+        { ...pickN(REGULAR_IR, 1)[0], label: '-ir (regelmäßig)' },
+        { ...pickN(REGULAR_RE, 1)[0], label: '-re (andere Endung)' },
+      ]
+      const drillVerbs = [
+        ...regulars,
+        ...irregulars.map(v => ({ ...v, label: 'unregelmäßig' })),
+      ]
 
       setForm(target)
       setVerbs(dueVerbs)
@@ -277,8 +287,9 @@ export default function GrammarPractice({ setView, setInSession }) {
       // ---- Übung erzeugen (Konjugationen + Geschichte) ----
       setPhase('generating')
 
-      // 1) Die 3 Unregelmäßigen vollständig durchkonjugieren (für den Drill + als Referenz).
-      const rows = await conjugateVerbs({ form: target, verbs: irregulars })
+      // 1) Alle Drill-Verben (3 regelmäßige + 3 unregelmäßige) vollständig
+      //    durchkonjugieren – für den Endungen-Drill (und als Referenz).
+      const rows = await conjugateVerbs({ form: target, verbs: drillVerbs })
       setDrillRows(rows)
 
       // 2) Geschichte erzeugen – Lücken = fällige DB-Verben + dieselben 3 Unregelmäßigen,
@@ -421,7 +432,7 @@ export default function GrammarPractice({ setView, setInSession }) {
         <h2 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Grammatik üben</h2>
         <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
           Diese Runde übst du <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{form?.name}</span>.
-          Schau dir zuerst die Theorie an und konjugiere die drei unregelmäßigen Verben durch – danach folgt die Geschichte.
+          Schau dir zuerst die Theorie an und konjugiere die Verben durch (regelmäßige Endungen -er/-ir/-re + 3 unregelmäßige) – danach folgt die Geschichte.
         </p>
 
         {form && (
