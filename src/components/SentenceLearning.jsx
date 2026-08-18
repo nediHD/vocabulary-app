@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { groupWords, generateCloze } from '../lib/groq'
+import { generateCloze } from '../lib/groq'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
 
@@ -105,37 +105,25 @@ export default function SentenceLearning({ setView, setInSession }) {
 
       const selected = dueCards.slice(0, 15)
 
-      setLoadingStep('Wörter werden gruppiert...')
-      let groups = []
-      try {
-        groups = await groupWords(selected)
-      } catch (gErr) {
-        console.error('groupWords error:', gErr)
-        setError('Fehler beim Gruppieren: ' + gErr.message)
-        setLoading(false)
-        return
+      // Wörter zufällig mischen (Fisher-Yates), damit die Lücken NICHT in der
+      // ursprünglichen Reihenfolge der Wörter erscheinen, sondern gemischt.
+      const shuffled = [...selected]
+      for (let k = shuffled.length - 1; k > 0; k--) {
+        const j = Math.floor(Math.random() * (k + 1))
+        ;[shuffled[k], shuffled[j]] = [shuffled[j], shuffled[k]]
       }
 
-      // Sicherheitsnetz: höchstens 2 Wörter pro Gruppe erzwingen, damit pro
-      // Lückentext nur ein paar unabhängige Sätze entstehen (keine Geschichte).
-      const MAX_PER_GROUP = 2
-      const cappedGroups = []
-      for (const g of groups) {
-        const arr = Array.isArray(g) ? g : [g]
-        for (let k = 0; k < arr.length; k += MAX_PER_GROUP) {
-          cappedGroups.push(arr.slice(k, k + MAX_PER_GROUP))
-        }
+      // Feste Gruppengröße: 3 Lücken pro Lückentext (Run).
+      const PER_GROUP = 3
+      const groups = []
+      for (let k = 0; k < shuffled.length; k += PER_GROUP) {
+        groups.push(shuffled.slice(k, k + PER_GROUP))
       }
-      groups = cappedGroups
 
       const newBatches = []
       for (let i = 0; i < groups.length; i++) {
         setLoadingStep(`Lückentexte werden erstellt (${i + 1}/${groups.length})...`)
-        const groupWords_arr = groups[i]
-
-        const matchedCards = groupWords_arr.map(fw =>
-          selected.find(card => card.french.toLowerCase().trim() === fw.toLowerCase().trim())
-        ).filter(Boolean)
+        const matchedCards = groups[i]
 
         if (matchedCards.length === 0) continue
 
