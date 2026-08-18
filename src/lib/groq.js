@@ -72,6 +72,28 @@ function capText(text, max) {
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim()
 }
 
+// Harte Obergrenze für einen Lückentext-Abschnitt: höchstens maxSent Sätze,
+// nimmt aber so viele Sätze wie nötig, um mindestens minBlanks Lücken abzudecken.
+// Danach werden Blanks entfernt, deren Platzhalter {{n}} nicht mehr im Text steht.
+function trimStoryPart(text, blanks, maxSent = 5, minBlanks = 2) {
+  const src = String(text || '')
+  const sentences = src.match(/[^.!?]*[.!?]+['"”»)]*\s*/g) || [src]
+  if (sentences.length <= maxSent) return { text: src.trim(), blanks: blanks || [] }
+  const totalNs = new Set((blanks || []).map(b => b.n))
+  const need = Math.min(minBlanks, totalNs.size)
+  const kept = []
+  const keptNs = new Set()
+  for (let i = 0; i < sentences.length; i++) {
+    kept.push(sentences[i])
+    for (const m of sentences[i].matchAll(/\{\{(\d+)\}\}/g)) keptNs.add(Number(m[1]))
+    if (kept.length >= maxSent && keptNs.size >= need) break
+  }
+  const newText = kept.join('').trim()
+  const presentNs = new Set([...newText.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1])))
+  if (presentNs.size === 0 && totalNs.size > 0) return { text: src.trim(), blanks: blanks || [] }
+  return { text: newText, blanks: (blanks || []).filter(b => presentNs.has(b.n)) }
+}
+
 export async function groupWords(words) {
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
@@ -261,9 +283,9 @@ ZU ÜBENDE VERBEN – jedes muss über die GESAMTE Geschichte mindestens einmal 
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
-LÄNGE: Jeder Abschnitt ist KURZ und enthält HÖCHSTENS 4–5 vollständige Sätze (niemals mehr als 5). Lieber knapp und dicht als lang – kein Ausschmücken, keine Wiederholungen.
+LÄNGE (SEHR WICHTIG): Jeder Abschnitt ist SEHR KURZ – GENAU 3 bis 4 kurze Sätze, NIEMALS mehr als 4. Keine langen Sätze, kein Ausschmücken, keine Nebenhandlungen. Halte jeden Abschnitt knapp.
 
-WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 3–5 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 3 Platzhalter (Lücken) enthalten – lieber ein Ziel-Verb ein zweites Mal einbauen, als unter 3 Lücken zu bleiben. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
+WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 2–3 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 2 Platzhalter (Lücken) enthalten. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
 
 PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
 
@@ -391,10 +413,13 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
   }
 
   // ---------- Runs bauen (Platzhalter stehen schon im Text) ----------
-  const runs = parts.map(p => ({
+  // Harte Kürzung: jeder Abschnitt max. 5 Sätze (Modell hält sich nicht immer dran).
+  const runs = parts.map(p => {
+    const trimmed = trimStoryPart(p.text, p.blanks, 5, 2)
+    return {
     title,
-    text: p.text,
-    blanks: p.blanks.map(b => ({
+    text: trimmed.text,
+    blanks: trimmed.blanks.map(b => ({
       n: b.n,
       answer: b._answer || b.answer || b.base,
       de: b.de || deByBase.get(grBaseKey(b.base)) || '',
@@ -404,7 +429,8 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
       reason: b._reason || '',
       note: b._note || `${b.tense}, ${PERSON_LABEL[b.person] || ''} von ${b.base}`,
     })),
-  })).filter(r => r.text)
+    }
+  }).filter(r => r.text)
 
   if (runs.length === 0) throw new Error('Groq: Keine Runs erzeugt')
   return { title, runs }
