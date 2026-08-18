@@ -116,6 +116,18 @@ export default function SentenceLearning({ setView, setInSession }) {
         return
       }
 
+      // Sicherheitsnetz: höchstens 2 Wörter pro Gruppe erzwingen, damit pro
+      // Lückentext nur ein paar unabhängige Sätze entstehen (keine Geschichte).
+      const MAX_PER_GROUP = 2
+      const cappedGroups = []
+      for (const g of groups) {
+        const arr = Array.isArray(g) ? g : [g]
+        for (let k = 0; k < arr.length; k += MAX_PER_GROUP) {
+          cappedGroups.push(arr.slice(k, k + MAX_PER_GROUP))
+        }
+      }
+      groups = cappedGroups
+
       const newBatches = []
       for (let i = 0; i < groups.length; i++) {
         setLoadingStep(`Lückentexte werden erstellt (${i + 1}/${groups.length})...`)

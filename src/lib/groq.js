@@ -97,14 +97,14 @@ function trimStoryPart(text, blanks, maxSent = 5, minBlanks = 2) {
 export async function groupWords(words) {
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Gruppiere diese französischen Wörter intelligent in thematisch zusammenhängende Gruppen mit 2-5 Wörtern pro Gruppe. Verwende nur die französischen Wörter wie unten angegeben:
+  const prompt = `Gruppiere diese französischen Wörter in kleine Gruppen mit HÖCHSTENS 2 Wörtern pro Gruppe (lieber thematisch passend, sonst einfach paarweise). Es soll später KEINE Geschichte entstehen, sondern nur wenige, unabhängige Übungssätze – deshalb sind die Gruppen bewusst klein. Verwende nur die französischen Wörter wie unten angegeben:
 
 ${wordList}
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung.
 
 Beispiel:
-{"groups": [["faire", "aller"], ["manger", "faim", "cuisiner"]]}
+{"groups": [["faire", "aller"], ["manger", "cuisiner"], ["faim"]]}
 
 Jetzt deine Antwort mit der obigen Liste:`
 
