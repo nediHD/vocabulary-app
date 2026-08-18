@@ -146,6 +146,21 @@ export default function Dashboard({ setView, setInSession }) {
           </span>
         </button>
 
+        <button
+          onClick={() => setView('form-overview')}
+          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--line-soft)',
+            color: 'var(--ink)',
+          }}
+        >
+          <span>Zeitform-Fortschritt 📊</span>
+          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
+            Nächste Form →
+          </span>
+        </button>
+
         {sectionLabel('Weiteres')}
         <button
           onClick={() => setView('audio')}

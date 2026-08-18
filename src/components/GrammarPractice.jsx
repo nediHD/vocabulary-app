@@ -177,7 +177,7 @@ function HintPopover({ blank, onClose }) {
 //  1) die am stärksten überfällige Wiederhol-Form,
 //  2) sonst die nächste NEUE Form in der Lern-Reihenfolge,
 //  3) sonst die als Nächstes anstehende Wiederhol-Form.
-function pickTargetForm(forms, progressRows) {
+export function pickTargetForm(forms, progressRows) {
   const prog = new Map((progressRows || []).map(r => [r.form_key, r]))
   const now = Date.now()
   const t = (r) => (r?.next_review_at ? new Date(r.next_review_at).getTime() : Infinity)

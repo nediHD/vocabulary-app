@@ -7,6 +7,7 @@ import SentenceLearning from './components/SentenceLearning'
 import AudioExercise from './components/AudioExercise'
 import Grammar from './components/Grammar'
 import GrammarPractice from './components/GrammarPractice'
+import FormOverview from './components/FormOverview'
 import Services from './components/Services'
 import PasswordGate from './components/PasswordGate'
 
@@ -39,6 +40,8 @@ export default function App() {
         return <Grammar setView={setView} />
       case 'grammar-practice':
         return <GrammarPractice setView={setView} setInSession={setInSession} />
+      case 'form-overview':
+        return <FormOverview setView={setView} />
       case 'services':
         return <Services setView={setView} />
       default:
