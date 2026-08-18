@@ -73,8 +73,7 @@ function withEnding(form, ending) {
 
 // Aktives Konjugations-Training: die 3 unregelmäßigen Verben dieser Runde
 // (Formen kommen vorkonjugiert aus `rows`), alle Personen selbst ausfüllen.
-function ConjugationDrill({ tenseId, tenseName, rows }) {
-  const [answers, setAnswers] = useState({})
+function ConjugationDrill({ tenseId, tenseName, rows, answers, setAnswers }) {
   const [revealed, setRevealed] = useState({})
   const [open, setOpen] = useState(false)
 
@@ -245,6 +244,8 @@ export default function GrammarPractice({ setView, setInSession }) {
   const [openHint, setOpenHint] = useState(null)
   const [todoOpen, setTodoOpen] = useState(false)
   const [graded, setGraded] = useState(false)
+  const [drillAnswers, setDrillAnswers] = useState({})       // Antworten des Endungen-Drills
+  const [storyScore, setStoryScore] = useState({ correct: 0, total: 0 }) // Treffer über alle Story-Teile
 
   useEffect(() => {
     setInSession(true)
@@ -329,6 +330,8 @@ export default function GrammarPractice({ setView, setInSession }) {
       setRunIndex(0)
       setAnswers({})
       setRevealed({})
+      setDrillAnswers({})
+      setStoryScore({ correct: 0, total: 0 })
       setOpenHint(null)
       setPhase('theory')
     } catch (e) {
@@ -343,10 +346,17 @@ export default function GrammarPractice({ setView, setInSession }) {
     setRevealed({})
     setOpenHint(null)
     setRunIndex(0)
+    setStoryScore({ correct: 0, total: 0 })
     setPhase('run')
   }
 
   const handleNext = () => {
+    // aktuellen Story-Teil auswerten und zur Gesamtwertung addieren
+    const run = runs[runIndex]
+    if (run) {
+      const correct = run.blanks.filter(b => norm(answers[b.n]) === norm(b.answer)).length
+      setStoryScore(s => ({ correct: s.correct + correct, total: s.total + run.blanks.length }))
+    }
     if (runIndex + 1 >= runs.length) { setPhase('finished'); return }
     setRunIndex(i => i + 1)
     setAnswers({})
@@ -404,9 +414,38 @@ export default function GrammarPractice({ setView, setInSession }) {
   }
 
   if (phase === 'finished') {
+    // Endauswertung: Endungen-Drill (nur ausgefüllte Felder) + Geschichte (alle Lücken).
+    let drillCorrect = 0, drillAttempted = 0
+    drillRows.forEach((r, vi) => {
+      ALL_PERSONS.filter(p => r.forms && r.forms[p] != null).forEach(p => {
+        const val = drillAnswers[`${vi}:${p}`]
+        if (val && val.trim()) {
+          drillAttempted++
+          if (norm(val) === norm(r.forms[p])) drillCorrect++
+        }
+      })
+    })
+    const totalCorrect = drillCorrect + storyScore.correct
+    const totalItems = drillAttempted + storyScore.total
+    const pct = totalItems ? Math.round((100 * totalCorrect) / totalItems) : 0
+    const pctColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#b45309' : '#ef4444'
+
     return (
-      <div className="mx-auto max-w-2xl text-center py-20">
+      <div className="mx-auto max-w-2xl text-center py-16">
         <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Geschichte zu Ende! 🎉</h2>
+
+        {/* Ergebnis in Prozent */}
+        <div className="mx-auto mb-8 max-w-sm rounded-3xl border p-6" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+          <div className="font-mono text-5xl font-bold" style={{ color: pctColor }}>{pct}%</div>
+          <div className="mt-1 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>
+            {totalCorrect} von {totalItems} richtig
+          </div>
+          <div className="mt-4 flex justify-center gap-6 text-sm" style={{ color: 'var(--ink-faint)' }}>
+            <span>Konjugationen: <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{drillAttempted ? `${drillCorrect}/${drillAttempted}` : '–'}</span></span>
+            <span>Geschichte: <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{storyScore.total ? `${storyScore.correct}/${storyScore.total}` : '–'}</span></span>
+          </div>
+        </div>
+
         {!graded ? (
           <>
             <p className="mb-2" style={{ color: 'var(--ink-soft)' }}>
@@ -457,7 +496,7 @@ export default function GrammarPractice({ setView, setInSession }) {
         {form && (
           <div className="mb-6 flex flex-col gap-3">
             <FormTheory form={form} />
-            <ConjugationDrill tenseId={form.id} tenseName={form.name} rows={drillRows} />
+            <ConjugationDrill tenseId={form.id} tenseName={form.name} rows={drillRows} answers={drillAnswers} setAnswers={setDrillAnswers} />
           </div>
         )}
 
