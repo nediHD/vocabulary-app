@@ -1,11 +1,10 @@
 import { jsonrepair } from 'jsonrepair'
 
 // Groq-Modell zentral. `llama-3.3-70b-versatile` wurde am 16.08.2026 von Groq
-// abgeschaltet. `openai/gpt-oss-120b` ist in dieser Org gesperrt (403), daher
-// Default = `llama-3.1-8b-instant` (in der Org-Allow-Liste vorhanden).
-// Über VITE_GROQ_MODEL jederzeit ohne Code-Änderung austauschbar – z. B. auf
-// 'openai/gpt-oss-120b', sobald es in den Groq-Org-Einstellungen freigegeben ist.
-const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.1-8b-instant'
+// abgeschaltet. Ersatz = `openai/gpt-oss-120b` (Groqs empfohlener starker
+// Ersatz). Muss in den Groq-Org-Einstellungen (Settings → Limits) freigegeben
+// sein, sonst 403. Über VITE_GROQ_MODEL jederzeit austauschbar.
+const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'openai/gpt-oss-120b'
 
 // llama setzt gern deutsche/typografische Anführungszeichen um Wörter MITTEN in
 // JSON-String-Werte („efflanqué", „petit" …). Kommt das schließende Zeichen als
