@@ -382,7 +382,7 @@ export default function GrammarPractice({ setView, setInSession }) {
     return (
       <div className="text-center py-24">
         <p className="mb-2" style={{ color: 'var(--ink-soft)' }}>Deine Übung wird vorbereitet…</p>
-        <p className="text-sm" style={{ color: 'var(--ink-faint)' }}>Konjugationen &amp; Geschichte werden erzeugt (einen Moment).</p>
+        <p className="text-sm" style={{ color: 'var(--ink-faint)' }}>Konjugationen &amp; Übungssätze werden erzeugt (einen Moment).</p>
       </div>
     )
   }
@@ -432,7 +432,7 @@ export default function GrammarPractice({ setView, setInSession }) {
 
     return (
       <div className="mx-auto max-w-2xl text-center py-16">
-        <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Geschichte zu Ende! 🎉</h2>
+        <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Übung fertig! 🎉</h2>
 
         {/* Ergebnis in Prozent */}
         <div className="mx-auto mb-8 max-w-sm rounded-3xl border p-6" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
@@ -490,7 +490,7 @@ export default function GrammarPractice({ setView, setInSession }) {
         <h2 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Grammatik üben</h2>
         <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
           Diese Runde übst du <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{form?.name}</span>.
-          Schau dir zuerst die Theorie an und konjugiere die Verben durch (regelmäßige Endungen -er/-ir/-re + 3 unregelmäßige) – danach folgt die Geschichte.
+          Schau dir zuerst die Theorie an und konjugiere die Verben durch (regelmäßige Endungen -er/-ir/-re + 3 unregelmäßige) – danach folgen die Übungssätze.
         </p>
 
         {form && (
@@ -519,7 +519,7 @@ export default function GrammarPractice({ setView, setInSession }) {
           style={{ backgroundColor: 'var(--blue)' }}
           onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
           onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}>
-          Geschichte starten →
+          Übung starten →
         </button>
       </div>
     )
@@ -693,7 +693,7 @@ export default function GrammarPractice({ setView, setInSession }) {
               style={{ backgroundColor: 'var(--blue)' }}
               onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
               onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}>
-              {runIndex + 1 >= TOTAL ? 'Geschichte abschließen →' : 'Weiter zum nächsten Teil →'}
+              {runIndex + 1 >= TOTAL ? 'Übung abschließen →' : 'Weiter →'}
             </button>
           </div>
         )}

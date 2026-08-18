@@ -276,36 +276,33 @@ export async function generateGrammarStory(opts) {
   const allowed = new Set(verbs.map(v => grBaseKey(v.french)))
   const deByBase = new Map(verbs.map(v => [grBaseKey(v.french), v.german]))
 
-  // ---------- DURCHLAUF 1: GANZE Geschichte MIT Lücken in ${numParts} Abschnitten ----------
-  const prompt1 = `Schreibe EINE zusammenhängende französische Geschichte in GENAU ${numParts} Abschnitten (Teil 1 bis ${numParts}). Die Abschnitte bilden EINE durchgehende Geschichte mit Anfang, Entwicklung und Ende – sie bauen aufeinander auf und WIEDERHOLEN sich NICHT (keine Szene, kein Satz und kein Motiv doppelt). Jeder Abschnitt setzt den vorherigen fort.
+  // ---------- DURCHLAUF 1: KURZE, eigenständige Beispielsätze mit Lücken (KEINE Geschichte) ----------
+  const prompt1 = `Erzeuge französische ÜBUNGSSÄTZE mit Lücken. Es ist KEINE zusammenhängende Geschichte – die Sätze sind voneinander UNABHÄNGIG und stehen jeder für sich.
 
-ZU ÜBENDE VERBEN – jedes muss über die GESAMTE Geschichte mindestens einmal vorkommen (Grundform/Infinitiv): ${verbList}
+ZU ÜBENDE VERBEN (GENAU EIN Satz pro Verb, in DIESER Reihenfolge, Grundform/Infinitiv): ${verbList}
 
-ZU ÜBENDE ZEITFORMEN: ${tenseList}
+ZEITFORM: In JEDEM Satz ist das Ziel-Verb in der Zeitform "${tenseList}" konjugiert.
 
-LÄNGE (SEHR WICHTIG): Jeder Abschnitt ist SEHR KURZ – GENAU 3 bis 4 kurze Sätze, NIEMALS mehr als 4. Keine langen Sätze, kein Ausschmücken, keine Nebenhandlungen. Halte jeden Abschnitt knapp.
-
-WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 2–3 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 2 Platzhalter (Lücken) enthalten. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
+AUFBAU:
+- Gruppiere die Sätze in "parts" mit je 2–3 kurzen, UNABHÄNGIGEN Sätzen (kein roter Faden zwischen den Sätzen).
+- Jeder Satz ist KURZ und einfach (höchstens ~12 Wörter), natürlich und sinnvoll – gerade genug Kontext, damit die richtige Verbform klar wird.
+- Pro Satz genau EINE Lücke: das konjugierte Ziel-Verb wird durch einen Platzhalter ersetzt. Nummeriere die Platzhalter PRO part neu ab {{1}} in Reihenfolge ({{1}}, {{2}}, {{3}}). An der Platzhalter-Stelle steht das Verb NICHT im Klartext.
+- Wähle je einen Kontext, der die Zeitform motiviert (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
+- Decke über ALLE Sätze verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nicht immer nur „il".
 
 PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
 
-REGELN:
-- Jedes Vorkommen eines Ziel-Verbs ist in EINER der 2 Zeitformen (${tenseList}) konjugiert.
-- Verteile die Verben so, dass über die ganze Geschichte ALLE mindestens einmal vorkommen.
-- Decke über die ganze Geschichte möglichst viele grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nutze auch Dialog/Ansprache.
-- Wähle Kontexte, die die Zeitform motivieren (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
-
-Gib für JEDEN Abschnitt "text" (mit den {{n}}-Lücken) und "blanks" (ein Eintrag pro Platzhalter) mit:
-- "n": Nummer des Platzhalters in DIESEM Abschnitt (passend zu {{n}} im text)
+Gib für JEDEN part "text" (mit den {{n}}-Lücken) und "blanks" (ein Eintrag pro Platzhalter) mit:
+- "n": Nummer des Platzhalters in DIESEM part (passend zu {{n}} im text)
 - "answer": die EXAKTE konjugierte Form, die in die Lücke gehört. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"), Futur proche = "aller+Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m'/te/le/lui …), OHNE Adverbien (déjà, souvent …).
 - "base": Infinitiv (aus der Liste)
 - "de": deutsche Bedeutung (aus der Liste)
-- "tense": genau eine der 2 Zeitformen (${tenseNames.map(n => `"${n}"`).join(', ')})
+- "tense": "${tenseList}"
 - "person": Code aus dem Subjekt – "1sg","2sg","3sg","1pl","2pl","3pl"
-- "sentence": der ganze Satz, in dem die Lücke steht – aber MIT dem Verb im Klartext (statt Platzhalter), als Kontext.
+- "sentence": derselbe Satz, aber MIT dem Verb im Klartext (statt Platzhalter), als Kontext.
 
 WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR mit gültigem JSON ohne Markdown:
-{"title":"...","parts":[{"text":"Ce matin-là, Paul se {{1}} très tôt et {{2}} un café en pensant à la journée; il savait qu'il {{3}} rester calme.","blanks":[{"n":1,"answer":"tortillait","base":"se tortiller","de":"sich winden","tense":"Imparfait","person":"3sg","sentence":"Ce matin-là, Paul se tortillait, incapable de rester en place."},{"n":2,"answer":"but","base":"boire","de":"trinken","tense":"Passé simple","person":"3sg","sentence":"Il but un café en pensant à la journée."},{"n":3,"answer":"devait","base":"devoir","de":"müssen","tense":"Imparfait","person":"3sg","sentence":"Il savait qu'il devait rester calme."}]}]}`
+{"title":"Sätze","parts":[{"text":"Ce matin-là, Paul se {{1}} sur sa chaise. Nous {{2}} un café avant de partir.","blanks":[{"n":1,"answer":"tortillait","base":"se tortiller","de":"sich winden","tense":"${tenseList}","person":"3sg","sentence":"Ce matin-là, Paul se tortillait sur sa chaise."},{"n":2,"answer":"buvions","base":"boire","de":"trinken","tense":"${tenseList}","person":"1pl","sentence":"Nous buvions un café avant de partir."}]}]}`
 
   let s
   try { s = parseGroqJSON(await callGroq(prompt1, { maxTokens: 6000, temperature: 0.6 })) }
