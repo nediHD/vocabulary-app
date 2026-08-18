@@ -169,15 +169,14 @@ Jetzt deine Antwort:`
 export async function generateCloze(words) {
 
   const wordList = words.map(w => `"${w.french}" (${w.german})`).join(', ')
-  const prompt = `Schreibe ein paar KURZE französische Sätze, in denen diese Lernwörter natürlich vorkommen:
+  const prompt = `Schreibe für JEDES der folgenden Lernwörter GENAU EINEN kurzen, einfachen französischen Satz. Es ist KEINE Geschichte – die Sätze sind voneinander UNABHÄNGIG und stehen jeder für sich.
 
-${wordList}
+LERNWÖRTER (genau EIN Satz pro Wort, in dieser Reihenfolge): ${wordList}
 
-LÄNGE (WICHTIG): SEHR KURZ – nur ${Math.max(3, words.length)} bis ${words.length + 3} kurze Sätze, höchstens ~400 Zeichen. Es muss KEINE Geschichte mit Handlung sein; ein paar sinnvolle, einfache Sätze reichen völlig. Kein Ausschmücken, keine Nebenhandlung.
-
-WICHTIGSTE REGEL – Lückentext: Jedes Vorkommen eines Lernworts im Text wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend nummeriert in der Reihenfolge des Auftretens). Das Lernwort selbst darf an dieser Stelle NICHT im Klartext stehen – dort steht nur der Platzhalter. Jedes Lernwort muss mindestens einmal vorkommen; kommt es mehrmals vor, ist JEDES Vorkommen ein eigener Platzhalter.
-
-Die Wörter dürfen natürlich gebeugt sein (Plural, konjugierte Verbform, weibliche Form, Zeitform usw.), so wie es der Satz verlangt. Andere (nicht gelernte) Wörter bleiben normal im Text.
+REGELN pro Satz:
+- Der Satz ist KURZ und einfach (höchstens ~10 Wörter), natürlich und sinnvoll – gerade genug Kontext, damit die richtige Form klar wird. Kein Ausschmücken, keine Handlung, keine Nebensätze aneinanderreihen.
+- Das Lernwort kommt genau EINMAL vor und wird durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (fortlaufend über alle Sätze nummeriert, in Reihenfolge). Das Wort selbst steht dort NICHT im Klartext.
+- Das Wort darf natürlich gebeugt sein (Plural, konjugierte Verbform, weibliche Form, Zeitform usw.), so wie es der Satz verlangt. Andere Wörter bleiben normaler Klartext.
 
 ARTIKEL-REGEL (WICHTIG): Ist ein Lernwort ein Nomen mit Artikel (z. B. "la gorgée", "le pouce"), entscheide pro Lücke EINDEUTIG: ENTWEDER die Lücke umfasst Artikel + Nomen (dann steht davor KEIN weiterer Artikel/Determinant) ODER der Artikel/Determinant (un, une, le, la, mon, ce, du, de …) bleibt im Klartext VOR der Lücke stehen und die Lücke ist NUR das Nomen (die "answer" OHNE Artikel). Es darf NIEMALS ein doppelter Artikel entstehen wie "une la gorgée". Die "answer" muss zusammen mit den umstehenden Wörtern grammatisch korrekt in den Satz passen.
 
@@ -191,15 +190,24 @@ Für jede Lücke gib an:
 
 WICHTIG: Antworte NUR mit gültigem JSON ohne Markdown. Keine Backticks, keine Erklärung außerhalb des JSON.
 
-Beispiel-Format:
-{"text":"Le matin, je {{1}} un café avant d'aller au {{2}}. Mes collègues {{3}} aussi beaucoup de café.","blanks":[{"n":1,"answer":"bois","de":"trinken","base":"boire","changed":true,"note":"1. Person Singular Präsens von boire"},{"n":2,"answer":"travail","de":"Arbeit","base":"travail","changed":false,"note":""},{"n":3,"answer":"boivent","de":"trinken","base":"boire","changed":true,"note":"3. Person Plural Präsens von boire"}]}
+Beispiel-Format (kurze, unabhängige Sätze – ein Satz pro Wort):
+{"text":"Le matin, je {{1}} un café. Nous allons au {{2}} à huit heures. Mes collègues {{3}} beaucoup.","blanks":[{"n":1,"answer":"bois","de":"trinken","base":"boire","changed":true,"note":"1. Person Singular Präsens von boire"},{"n":2,"answer":"travail","de":"Arbeit","base":"travail","changed":false,"note":""},{"n":3,"answer":"boivent","de":"trinken","base":"boire","changed":true,"note":"3. Person Plural Präsens von boire"}]}
 
 Jetzt deine Antwort:`
 
   const content = await callGroq(prompt, { maxTokens: 3000, temperature: 0.6 })
   const parsed = parseGroqJSON(content)
 
-  const text = String(parsed?.text || '')
+  let text = String(parsed?.text || '')
+  // Sicherheitsnetz gegen zu lange Texte: Sätze OHNE Lücke ({{n}}) sind reines
+  // Ausschmücken/Erzählung und werden entfernt. Alle Platzhalter bleiben erhalten.
+  {
+    const sents = text.match(/[^.!?]*[.!?]+['"”»)]*\s*/g)
+    if (sents && sents.length > 1) {
+      const kept = sents.filter(s => /\{\{\d+\}\}/.test(s))
+      if (kept.length) text = kept.join('').trim()
+    }
+  }
   const blanks = (Array.isArray(parsed?.blanks) ? parsed.blanks : [])
     .map(b => ({
       n: Number(b.n),
