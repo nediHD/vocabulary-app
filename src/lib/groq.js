@@ -261,7 +261,7 @@ ZU ÜBENDE VERBEN – jedes muss über die GESAMTE Geschichte mindestens einmal 
 
 ZU ÜBENDE ZEITFORMEN: ${tenseList}
 
-LÄNGE: Jeder Abschnitt hat 4–6 vollständige Sätze (ausführlich, nicht nur ein paar Wörter). Die ganze Geschichte soll dadurch schön lang werden.
+LÄNGE: Jeder Abschnitt ist KURZ und enthält HÖCHSTENS 4–5 vollständige Sätze (niemals mehr als 5). Lieber knapp und dicht als lang – kein Ausschmücken, keine Wiederholungen.
 
 WICHTIGSTE REGEL – LÜCKEN: In JEDEM Abschnitt kommen 3–5 der zu übenden Verben konjugiert vor. JEDES solche konjugierte Ziel-Verb wird im "text" durch einen Platzhalter {{1}}, {{2}}, {{3}} … ersetzt (PRO ABSCHNITT neu ab {{1}} nummeriert, in der Reihenfolge des Auftretens). An der Platzhalter-Stelle steht das konjugierte Verb NICHT im Klartext – dort steht NUR der Platzhalter. JEDER Abschnitt MUSS ZWINGEND mindestens 3 Platzhalter (Lücken) enthalten – lieber ein Ziel-Verb ein zweites Mal einbauen, als unter 3 Lücken zu bleiben. Nur die zu übenden Verben werden zu Lücken; alle anderen Wörter bleiben normaler Klartext.
 
