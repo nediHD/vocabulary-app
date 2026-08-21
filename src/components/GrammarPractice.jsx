@@ -269,9 +269,10 @@ export default function GrammarPractice({ setView, setInSession }) {
       const nowMs = new Date(now).getTime()
       const all = data || []
       const due = all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
-      if (due.length === 0) { setPhase('none'); return }
 
-      // Fällige DB-Verben auf 10 auffüllen (sonst die als Nächstes anstehenden).
+      // Immer 10 Verben pro Runde anvisieren – unabhängig davon, wie viele gerade
+      // fällig sind (0, 3, 6 …). Zuerst die fälligen nehmen, dann mit den als
+      // Nächstes anstehenden Verben auf 10 auffüllen.
       let pool = pickN(due, due.length)
       if (pool.length < TARGET_DUE) {
         const dueIds = new Set(due.map(c => c.id))
@@ -282,6 +283,8 @@ export default function GrammarPractice({ setView, setInSession }) {
         })
         pool = [...pool, ...rest.slice(0, TARGET_DUE - pool.length)]
       }
+      // Nur wenn es gar keine Verben in der Datenbank gibt, ist nichts zu üben.
+      if (pool.length === 0) { setPhase('none'); return }
       const dueVerbs = pool.map(c => ({ french: c.french, german: c.german }))
 
       // Zielform nach Form-SRS bestimmen.
@@ -502,7 +505,7 @@ export default function GrammarPractice({ setView, setInSession }) {
 
         <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface-2)' }}>
           <div className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-            Fällige Verben in dieser Runde ({verbs.length})
+            Verben in dieser Runde ({verbs.length})
           </div>
           <div className="flex flex-wrap gap-1.5">
             {verbs.map((v, i) => (
@@ -643,7 +646,7 @@ export default function GrammarPractice({ setView, setInSession }) {
           {todoOpen && (
             <div className="grid gap-5 px-5 pb-5 sm:grid-cols-2">
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Verben (alle fälligen)</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>Verben (alle dieser Runde)</div>
                 <ul className="flex flex-col gap-1.5">
                   {verbs.map((v, i) => {
                     const on = seenBases.has(baseKey(v.french))
