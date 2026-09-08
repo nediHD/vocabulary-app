@@ -417,6 +417,71 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
     })
   }
 
+  // ---------- Doppeltes „aller" (Futur proche) & Reflexivpronomen bereinigen ----------
+  // Zwei häufige Modell-Fehler werden hier im Code sauber korrigiert, damit Text und
+  // Lücke immer zusammenpassen:
+  //  (1) Futur proche: das Modell schreibt „va" oft schon als Klartext vor die Lücke
+  //      UND die answer ist „va crocheter" → „Elle va va crocheter". Fix: die VOLLE Form
+  //      (aller + Infinitiv) gehört in die Lücke; ein direkt davor stehendes „va" wird
+  //      aus dem Text entfernt (bzw. in die answer geholt, wenn dort nur der Infinitiv steht).
+  //  (2) Reflexive Verben (se/s'…): das Pronomen gehört als Klartext VOR die Lücke, nie in
+  //      die answer. Fix: Pronomen aus der answer streichen und – falls im Text keins steht –
+  //      das nach Person korrekte Pronomen (mit Elision m'/t'/s') davor einsetzen.
+  const ALLER_END = /\b(vais|vas|va|allons|allez|vont)\s+$/i
+  const ALLER_LEAD = /^(?:vais|vas|va|allons|allez|vont)\b\s*/i
+  const ALLER_ANY = /\b(?:vais|vas|va|allons|allez|vont)\b/i
+  const REFL_LEAD = /^(?:me|te|se|nous|vous)\b\s+|^[mts]['’]\s*/i
+  const REFL_END = /(?:\b(?:me|te|se|nous|vous)|[mts]['’])\s*$/i
+  const startsVowel = (w) => /^[aeiouyàâäéèêëîïôöûüh]/i.test(String(w || '').trim())
+  const reflForPerson = (person, answer) => {
+    const v = startsVowel(answer)
+    switch (person) {
+      case '1sg': return v ? "m'" : 'me'
+      case '2sg': return v ? "t'" : 'te'
+      case '1pl': return 'nous'
+      case '2pl': return 'vous'
+      default:    return v ? "s'" : 'se' // 3sg/3pl (il/elle/on, ils/elles)
+    }
+  }
+  parts.forEach(p => {
+    p.blanks.forEach(b => {
+      const ph = `{{${b.n}}}`
+      const idx = p.text.indexOf(ph)
+      if (idx < 0) return
+      let before = p.text.slice(0, idx)
+      const after = p.text.slice(idx + ph.length)
+      let ans = (b._answer || b.answer || b.base || '').trim()
+      const isFuturProche = /futur\s*proche/i.test(b.tense || '')
+      const isReflexive = /^se\s/i.test(b.base || '') || /^s['’]/i.test(b.base || '')
+
+      // (1) Futur proche: „aller" nur EINMAL – und zwar in der Lücke.
+      if (isFuturProche) {
+        const m = before.match(ALLER_END)
+        if (m) {
+          before = before.replace(ALLER_END, '')            // Doppel-„va" aus dem Text raus
+          if (!ALLER_LEAD.test(ans)) ans = `${m[1].toLowerCase()} ${ans}`.trim() // volle Form in die Lücke
+        } else if (ALLER_LEAD.test(ans) && ALLER_ANY.test(before)) {
+          // „va" steht nicht direkt vor der Lücke, aber schon woanders im Satz
+          // (z. B. „il va se {{1}}") → nicht zusätzlich in der answer.
+          ans = ans.replace(ALLER_LEAD, '').trim()
+        }
+      }
+
+      // (2) Reflexive Verben: genau EIN korrektes Pronomen, immer als Klartext vor der Lücke.
+      if (isReflexive) {
+        ans = ans.replace(REFL_LEAD, '').trim()             // Pronomen nie in der answer
+        if (!REFL_END.test(before)) {
+          const pron = reflForPerson(b.person, ans)
+          const elided = /['’]$/.test(pron)                 // m'/t'/s' klebt am Verb, sonst Leerzeichen
+          before = before.replace(/\s+$/, '') + ' ' + pron + (elided ? '' : ' ')
+        }
+      }
+
+      p.text = before + ph + after
+      b._answer = ans
+    })
+  })
+
   // ---------- Runs bauen (Platzhalter stehen schon im Text) ----------
   // Harte Kürzung: jeder Abschnitt max. 5 Sätze (Modell hält sich nicht immer dran).
   const runs = parts.map(p => {
