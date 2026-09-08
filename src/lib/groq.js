@@ -297,8 +297,12 @@ AUFBAU:
 - Pro Satz genau EINE Lücke: das konjugierte Ziel-Verb wird durch einen Platzhalter ersetzt. Nummeriere die Platzhalter PRO part neu ab {{1}} in Reihenfolge ({{1}}, {{2}}, {{3}}). An der Platzhalter-Stelle steht das Verb NICHT im Klartext.
 - Wähle je einen Kontext, der die Zeitform motiviert (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
 - Decke über ALLE Sätze verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nicht immer nur „il".
+- Formuliere die Sätze BEJAHT: KEINE Verneinung (ne … pas/plus/jamais/rien) rund um die Lücke. Sonst zerreißt „ne … pas" bei zusammengesetzten Zeiten die Verbform („n'a pas pris") und passt nicht mehr in EINE Lücke.
 
-PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
+PRONOMEN-REGEL: Ein vorangestelltes Reflexiv-/Objektpronomen (se, s', me, m', te, t', lui, le, la, les, y, en, nous, vous …) bleibt als Klartext VOR der Lücke stehen und gehört NICHT in die Lücke. Beispiel: „il se {{1}} sur son siège" (Lücke = nur „tortillait", nicht „se tortillait").
+IMPERATIV-REGEL: Beim BEJAHTEN Imperativ steht das Reflexivpronomen NACH dem Verb mit Bindestrich und te→toi („{{1}}-toi" für „lève-toi", „{{1}}-nous", „{{1}}-vous"); die Lücke ist nur das Verb ohne Pronomen. Beim verneinten Imperativ steht es normal davor („ne te {{1}} pas").
+ACCORD-REGEL: Bei zusammengesetzten Zeiten mit „être" und bei reflexiven Verben wird das Partizip in Geschlecht/Zahl angeglichen (z. B. „elle est allée", „ils sont partis", „elle s'est lavée"); die "answer" enthält GENAU diese angeglichene Form.
+ELISION: „je→j'", „ne→n'", „que→qu'" vor Vokal/stummem h bleiben als Klartext im Satz (nicht in der Lücke).
 
 Gib für JEDEN part "text" (mit den {{n}}-Lücken) und "blanks" (ein Eintrag pro Platzhalter) mit:
 - "n": Nummer des Platzhalters in DIESEM part (passend zu {{n}} im text)
@@ -361,7 +365,7 @@ WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR m
 ${listStr}
 
 Für jeden Eintrag (gleiche Reihenfolge, gleiche Anzahl) gib zurück:
-- "answer": die grammatikalisch korrekte französische Form von base in der angegebenen Zeitform + Person. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"); Futur proche = "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m' …), OHNE Adverbien.
+- "answer": die grammatikalisch korrekte französische Form von base in der angegebenen Zeitform + Person. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"); Futur proche = "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m' …), OHNE Adverbien. ACCORD: Bei „être"-Verben und reflexiven Verben das Partizip in Geschlecht/Zahl an das Subjekt angleichen (elle est allée, ils sont partis, elle s'est lavée).
 - "reason": INDIVIDUELLE deutsche Begründung (1–2 Sätze), warum im Kontextsatz genau diese Zeitform passt (konkretes Signalwort/Kontext). Jede Begründung anders formulieren, keine Standardsätze. Nenne NICHT die Lösung.
 - "note": kurze deutsche Formangabe, z. B. "Imparfait, 1. Person Singular von manger".
 
@@ -390,7 +394,7 @@ Antworte NUR mit gültigem JSON ohne Markdown:
 
 ${verifyList}
 
-Gib pro Eintrag die KORREKTE Form zurück – ist die vorgeschlagene bereits richtig, gib sie unverändert zurück; ist sie falsch, gib die korrigierte Form. NUR der Verbteil (zusammengesetzte Zeiten: Hilfsverb+Partizip; Futur proche: aller+Infinitiv), OHNE Pronomen (se/s'/m' …), OHNE Adverbien.
+Gib pro Eintrag die KORREKTE Form zurück – ist die vorgeschlagene bereits richtig, gib sie unverändert zurück; ist sie falsch, gib die korrigierte Form. NUR der Verbteil (zusammengesetzte Zeiten: Hilfsverb+Partizip; Futur proche: aller+Infinitiv), OHNE Pronomen (se/s'/m' …), OHNE Adverbien. Achte auf die ACCORD (Angleichung des Partizips bei „être"-Verben und reflexiven Verben: elle est allée, ils sont partis, elle s'est lavée).
 
 Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wie oben:
 {"checked":["Form 1","Form 2","..."]}`
@@ -417,63 +421,95 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
     })
   }
 
-  // ---------- Doppeltes „aller" (Futur proche) & Reflexivpronomen bereinigen ----------
-  // Zwei häufige Modell-Fehler werden hier im Code sauber korrigiert, damit Text und
-  // Lücke immer zusammenpassen:
-  //  (1) Futur proche: das Modell schreibt „va" oft schon als Klartext vor die Lücke
-  //      UND die answer ist „va crocheter" → „Elle va va crocheter". Fix: die VOLLE Form
-  //      (aller + Infinitiv) gehört in die Lücke; ein direkt davor stehendes „va" wird
-  //      aus dem Text entfernt (bzw. in die answer geholt, wenn dort nur der Infinitiv steht).
-  //  (2) Reflexive Verben (se/s'…): das Pronomen gehört als Klartext VOR die Lücke, nie in
-  //      die answer. Fix: Pronomen aus der answer streichen und – falls im Text keins steht –
-  //      das nach Person korrekte Pronomen (mit Elision m'/t'/s') davor einsetzen.
-  const ALLER_END = /\b(vais|vas|va|allons|allez|vont)\s+$/i
-  const ALLER_LEAD = /^(?:vais|vas|va|allons|allez|vont)\b\s*/i
-  const ALLER_ANY = /\b(?:vais|vas|va|allons|allez|vont)\b/i
+  // ---------- Verbform-Bereinigung: Text und Lücke immer konsistent ----------
+  // Behebt eine ganze Klasse von Modell-Fehlern, bei denen ein Teil der Verbform als
+  // Klartext im Satz landet und ein anderer in der Lücke – sie würden sich sonst doppeln
+  // oder auseinanderfallen:
+  //  A) Zusammengesetzte Zeiten (Passé composé, Plus-que-parfait, Futur antérieur,
+  //     Conditionnel/Subjonctif passé) + Futur proche: das Hilfsverb bzw. „aller"
+  //     (est, a, avait, aura, aurait, aie, soit, sera, va …) steht oft schon als Klartext
+  //     vor der Lücke UND in der answer → Doppelung („elle est est venue"). Fix: die VOLLE
+  //     Form gehört in die Lücke; ein direkt davor stehendes Hilfsverb wird aus dem Text
+  //     entfernt – bzw. in die answer geholt, wenn dort nur Partizip/Infinitiv steht.
+  //  B) Reflexive Verben (se/s'…): genau EIN Pronomen, als Klartext an der richtigen
+  //     Stelle. Normal + verneinter Imperativ: VORangestellt (mit Elision m'/t'/s').
+  //     Bejahter Imperativ: NACHgestellt mit Bindestrich und te→toi („lève-toi").
+  //  E) Objekt-/Reflexivpronomen kommen nie in die answer – nur der reine Verbteil.
+  const AUX_LIST = [
+    'vais', 'vas', 'va', 'allons', 'allez', 'vont',            // aller (Futur proche)
+    'ai', 'as', 'a', 'avons', 'avez', 'ont',                   // avoir Présent
+    'avais', 'avait', 'avions', 'aviez', 'avaient',            // avoir Imparfait
+    'aurai', 'auras', 'aura', 'aurons', 'aurez', 'auront',     // avoir Futur
+    'aurais', 'aurait', 'aurions', 'auriez', 'auraient',       // avoir Conditionnel
+    'aie', 'aies', 'ait', 'ayons', 'ayez', 'aient',            // avoir Subjonctif
+    'suis', 'es', 'est', 'sommes', 'êtes', 'sont',             // être Présent
+    'étais', 'était', 'étions', 'étiez', 'étaient',            // être Imparfait
+    'serai', 'seras', 'sera', 'serons', 'serez', 'seront',     // être Futur
+    'serais', 'serait', 'serions', 'seriez', 'seraient',       // être Conditionnel
+    'sois', 'soit', 'soyons', 'soyez', 'soient',               // être Subjonctif
+  ]
+  const AUX_ALT = [...new Set(AUX_LIST)].sort((a, b) => b.length - a.length).join('|')
+  const DELIM = "\\s('\"«.,;:!?–—\u2019-"
+  const AUX_END = new RegExp(`(^|[${DELIM}])(${AUX_ALT})\\s+$`, 'i')       // Hilfsverb direkt vor der Lücke
+  const AUX_LEAD = new RegExp(`^(?:${AUX_ALT})(?=\\s|$)`, 'i')             // answer beginnt mit Hilfsverb
+  const AUX_ANY = new RegExp(`(?:^|[^0-9A-Za-zÀ-ÿ])(?:${AUX_ALT})(?![0-9A-Za-zÀ-ÿ])`, 'i')
   const REFL_LEAD = /^(?:me|te|se|nous|vous)\b\s+|^[mts]['’]\s*/i
   const REFL_END = /(?:\b(?:me|te|se|nous|vous)|[mts]['’])\s*$/i
+  const IMP_POST = /^\s*-\s*(?:toi|moi|nous|vous|le|la|les|lui|leur|y|en)\b/i
   const startsVowel = (w) => /^[aeiouyàâäéèêëîïôöûüh]/i.test(String(w || '').trim())
-  const reflForPerson = (person, answer) => {
-    const v = startsVowel(answer)
+  const reflBefore = (person, next) => {                        // vorangestellt (+ Elision vor Vokal)
+    const v = startsVowel(next)
     switch (person) {
       case '1sg': return v ? "m'" : 'me'
       case '2sg': return v ? "t'" : 'te'
       case '1pl': return 'nous'
       case '2pl': return 'vous'
-      default:    return v ? "s'" : 'se' // 3sg/3pl (il/elle/on, ils/elles)
+      default:    return v ? "s'" : 'se' // 3sg/3pl
     }
   }
+  const reflAfterImp = (person) => (person === '1pl' ? 'nous' : person === '2pl' ? 'vous' : 'toi') // 2sg → toi
+
   parts.forEach(p => {
     p.blanks.forEach(b => {
       const ph = `{{${b.n}}}`
       const idx = p.text.indexOf(ph)
       if (idx < 0) return
       let before = p.text.slice(0, idx)
-      const after = p.text.slice(idx + ph.length)
+      let after = p.text.slice(idx + ph.length)
       let ans = (b._answer || b.answer || b.base || '').trim()
-      const isFuturProche = /futur\s*proche/i.test(b.tense || '')
+
+      const t = b.tense || ''
+      const isFuturProche = /futur\s*proche/i.test(t)
+      const isImperatif = /imp[ée]ratif/i.test(t)
+      const isCompound = /compos/i.test(t) || /ant[ée]rieur/i.test(t) ||
+        /plus[- ]?que[- ]?parfait/i.test(t) || (/(conditionnel|subjonctif)/i.test(t) && /pass/i.test(t))
       const isReflexive = /^se\s/i.test(b.base || '') || /^s['’]/i.test(b.base || '')
 
-      // (1) Futur proche: „aller" nur EINMAL – und zwar in der Lücke.
-      if (isFuturProche) {
-        const m = before.match(ALLER_END)
+      // (E) Pronomen gehören nie in die answer – nur der Verbteil.
+      ans = ans.replace(REFL_LEAD, '').trim()
+      // Beim Imperativ zusätzlich ein nachgestelltes Pronomen aus der answer streichen.
+      if (isImperatif) ans = ans.replace(/\s*-\s*(?:toi|moi|nous|vous|le|la|les|lui|leur|y|en)\b/gi, '').trim()
+
+      // (A) Hilfsverb/„aller" genau EINMAL – in der Lücke.
+      if (isCompound || isFuturProche) {
+        const m = before.match(AUX_END)
         if (m) {
-          before = before.replace(ALLER_END, '')            // Doppel-„va" aus dem Text raus
-          if (!ALLER_LEAD.test(ans)) ans = `${m[1].toLowerCase()} ${ans}`.trim() // volle Form in die Lücke
-        } else if (ALLER_LEAD.test(ans) && ALLER_ANY.test(before)) {
-          // „va" steht nicht direkt vor der Lücke, aber schon woanders im Satz
-          // (z. B. „il va se {{1}}") → nicht zusätzlich in der answer.
-          ans = ans.replace(ALLER_LEAD, '').trim()
+          before = before.replace(AUX_END, '$1')                     // Doppel-Hilfsverb aus dem Text raus
+          if (!AUX_LEAD.test(ans)) ans = `${m[2].toLowerCase()} ${ans}`.replace(/\s+/g, ' ').trim()
+        } else if (AUX_LEAD.test(ans) && AUX_ANY.test(before)) {
+          ans = ans.replace(AUX_LEAD, '').trim()                     // Hilfsverb steht schon woanders im Satz
         }
       }
 
-      // (2) Reflexive Verben: genau EIN korrektes Pronomen, immer als Klartext vor der Lücke.
+      // (B) Reflexivpronomen an die richtige Stelle.
       if (isReflexive) {
-        ans = ans.replace(REFL_LEAD, '').trim()             // Pronomen nie in der answer
-        if (!REFL_END.test(before)) {
-          const pron = reflForPerson(b.person, ans)
-          const elided = /['’]$/.test(pron)                 // m'/t'/s' klebt am Verb, sonst Leerzeichen
-          before = before.replace(/\s+$/, '') + ' ' + pron + (elided ? '' : ' ')
+        if (isImperatif && !/(^|[^a-zà-ÿ])(?:ne|n['’])([^a-zà-ÿ]|$)/i.test(before)) {
+          // bejahter Imperativ: Pronomen NACHgestellt mit Bindestrich („lève-toi")
+          if (!IMP_POST.test(after)) after = '-' + reflAfterImp(b.person) + after
+        } else if (!REFL_END.test(before)) {
+          // sonst (auch verneinter Imperativ): Pronomen VORangestellt
+          const pron = reflBefore(b.person, ans)
+          before = before.replace(/\s+$/, '') + ' ' + pron + (/['’]$/.test(pron) ? '' : ' ')
         }
       }
 
