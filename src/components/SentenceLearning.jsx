@@ -43,14 +43,17 @@ export default function SentenceLearning({ setView, setInSession }) {
   const [error, setError] = useState('')
   const [batchIdx, setBatchIdx] = useState(0)
   const [phase, setPhase] = useState('cloze')
-  const [wordWriteIdx, setWordWriteIdx] = useState(0)
-  const [userInput, setUserInput] = useState('')
-  const [revealed, setRevealed] = useState(false)
   const [pills, setPills] = useState([])
 
-  // Lückentext-Eingaben (keyed by Platzhalter-Nummer) + Auswertung
+  // Lückentext-Eingaben (keyed by Platzhalter-Nummer) + Auswertung pro Lücke
   const [clozeAnswers, setClozeAnswers] = useState({})
-  const [clozeGraded, setClozeGraded] = useState(false)
+  const [clozeGradedBlanks, setClozeGradedBlanks] = useState({})
+  const clozeInputRefs = useRef({})
+
+  // Wörter-schreiben-Phase: Eingaben + Auswertung pro Wort
+  const [writeAnswers, setWriteAnswers] = useState({})
+  const [writeGraded, setWriteGraded] = useState({})
+  const writeInputRefs = useRef({})
 
   // Wiederholung (flashcard review) der geübten Wörter am Ende
   const [mode, setMode] = useState('sentences') // 'sentences' | 'review'
@@ -175,10 +178,9 @@ export default function SentenceLearning({ setView, setInSession }) {
             setBatchIdx(0)
             setPhase('cloze')
             setClozeAnswers({})
-            setClozeGraded(false)
-            setWordWriteIdx(0)
-            setUserInput('')
-            setRevealed(false)
+            setClozeGradedBlanks({})
+            setWriteAnswers({})
+            setWriteGraded({})
             loadBatches()
           }}
           className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
@@ -408,15 +410,54 @@ export default function SentenceLearning({ setView, setInSession }) {
       setBatchIdx(batchIdx + 1)
       setPhase('cloze')
       setClozeAnswers({})
-      setClozeGraded(false)
-      setWordWriteIdx(0)
-      setUserInput('')
-      setRevealed(false)
+      setClozeGradedBlanks({})
+      setWriteAnswers({})
+      setWriteGraded({})
     }
   }
 
   // Auswertung Lückentext
   const clozeCorrectCount = current.blanks.filter(b => norm(clozeAnswers[b.n]) === norm(b.answer)).length
+
+  // Eine einzelne Lücke per Enter prüfen und Fokus auf die nächste offene Lücke setzen
+  const gradeClozeBlank = (n) => {
+    setClozeGradedBlanks(prev => ({ ...prev, [n]: true }))
+    const order = current.blanks.map(b => b.n)
+    const pos = order.indexOf(n)
+    for (let k = pos + 1; k < order.length; k++) {
+      if (!clozeGradedBlanks[order[k]] && clozeInputRefs.current[order[k]]) {
+        clozeInputRefs.current[order[k]].focus()
+        break
+      }
+    }
+  }
+
+  const gradeAllCloze = () => {
+    const next = {}
+    current.blanks.forEach(b => { next[b.n] = true })
+    setClozeGradedBlanks(next)
+  }
+
+  const allClozeGraded = current.blanks.length > 0 && current.blanks.every(b => clozeGradedBlanks[b.n])
+
+  // Ein einzelnes Wort per Enter prüfen und Fokus auf das nächste offene Wort setzen
+  const gradeWriteWord = (idx) => {
+    setWriteGraded(prev => ({ ...prev, [idx]: true }))
+    for (let k = idx + 1; k < current.words.length; k++) {
+      if (!writeGraded[k] && writeInputRefs.current[k]) {
+        writeInputRefs.current[k].focus()
+        break
+      }
+    }
+  }
+
+  const gradeAllWrite = () => {
+    const next = {}
+    current.words.forEach((_, idx) => { next[idx] = true })
+    setWriteGraded(next)
+  }
+
+  const allWriteGraded = current.words.length > 0 && current.words.every((_, idx) => writeGraded[idx])
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -473,11 +514,12 @@ export default function SentenceLearning({ setView, setInSession }) {
               const blank = current.blanks.find(b => b.n === n)
               if (!blank) return <span key={i}>____</span>
 
+              const graded = !!clozeGradedBlanks[n]
               const val = clozeAnswers[n] || ''
               const correct = norm(val) === norm(blank.answer)
               let borderColor = 'var(--blue)'
               let bg = 'white'
-              if (clozeGraded) {
+              if (graded) {
                 borderColor = correct ? '#16a34a' : '#ef4444'
                 bg = correct ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)'
               }
@@ -486,23 +528,24 @@ export default function SentenceLearning({ setView, setInSession }) {
                 <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'middle', margin: '0 3px' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
                     <input
+                      ref={el => { clozeInputRefs.current[n] = el }}
                       type="text"
                       value={val}
-                      disabled={clozeGraded}
+                      disabled={graded}
                       onChange={e => setClozeAnswers(prev => ({ ...prev, [n]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (!graded) gradeClozeBlank(n) } }}
                       size={Math.max(6, blank.answer.length + 2)}
                       className="rounded-lg border-2 px-2 py-1 text-center font-sans text-base outline-none"
                       style={{ borderColor, backgroundColor: bg, color: 'var(--ink)' }}
                     />
                     <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>({blank.de})</span>
                   </span>
-                  {clozeGraded && !correct && (
+                  {graded && !correct && (
                     <span className="mt-0.5 text-xs font-semibold" style={{ color: '#16a34a' }}>
                       ✓ {blank.answer}
                     </span>
                   )}
-                  {clozeGraded && blank.changed && blank.note && (
+                  {graded && blank.changed && blank.note && (
                     <span className="mt-0.5 max-w-[220px] text-xs italic" style={{ color: 'var(--blue-dark)' }}>
                       ⓘ {blank.note}
                     </span>
@@ -512,16 +555,21 @@ export default function SentenceLearning({ setView, setInSession }) {
             })}
           </div>
 
-          {!clozeGraded ? (
-            <button
-              onClick={() => setClozeGraded(true)}
-              className="w-full max-w-sm rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-              style={{ backgroundColor: 'var(--blue)' }}
-              onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-              onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-            >
-              Fertig
-            </button>
+          {!allClozeGraded ? (
+            <div className="w-full max-w-sm text-center">
+              <p className="mb-4 text-xs" style={{ color: 'var(--ink-faint)' }}>
+                Drücke Enter in einer Lücke, um sie zu prüfen.
+              </p>
+              <button
+                onClick={gradeAllCloze}
+                className="w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+                style={{ backgroundColor: 'var(--blue)' }}
+                onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+                onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+              >
+                Alle prüfen
+              </button>
+            </div>
           ) : (
             <div className="w-full max-w-sm">
               <p className="mb-4 text-center text-sm font-medium" style={{ color: 'var(--ink)' }}>
@@ -530,9 +578,8 @@ export default function SentenceLearning({ setView, setInSession }) {
               <button
                 onClick={() => {
                   setPhase('write')
-                  setWordWriteIdx(0)
-                  setUserInput('')
-                  setRevealed(false)
+                  setWriteAnswers({})
+                  setWriteGraded({})
                 }}
                 className="w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
                 style={{ backgroundColor: 'var(--blue)' }}
@@ -553,95 +600,74 @@ export default function SentenceLearning({ setView, setInSession }) {
             <div style={{ color: 'var(--ink-soft)' }} className="text-sm">
               Schreibe die Wörter auf Französisch:
             </div>
+            {!allWriteGraded && (
+              <div className="mt-1 text-xs" style={{ color: 'var(--ink-faint)' }}>
+                Drücke Enter, um ein Wort zu prüfen.
+              </div>
+            )}
           </div>
 
           <div className="mb-8 w-full max-w-2xl space-y-6">
-            {current.words.map((word, idx) => (
-              <div key={idx} className="rounded-2xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
-                <div
-                  className="mb-2 font-mono text-xs font-medium uppercase tracking-wider"
-                  style={{ color: 'var(--ink-faint)' }}
-                >
-                  Wort {idx + 1} (Deutsch): {word.german}
+            {current.words.map((word, idx) => {
+              const graded = !!writeGraded[idx]
+              const val = writeAnswers[idx] || ''
+              const correct = norm(val) === norm(word.french)
+              let borderColor = 'var(--line)'
+              let bg = 'white'
+              if (graded) {
+                borderColor = correct ? '#16a34a' : '#ef4444'
+                bg = correct ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)'
+              }
+              return (
+                <div key={idx} className="rounded-2xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
+                  <div
+                    className="mb-2 font-mono text-xs font-medium uppercase tracking-wider"
+                    style={{ color: 'var(--ink-faint)' }}
+                  >
+                    Wort {idx + 1} (Deutsch): {word.german}
+                  </div>
+                  <input
+                    ref={el => { writeInputRefs.current[idx] = el }}
+                    type="text"
+                    placeholder="Französisch..."
+                    value={val}
+                    disabled={graded}
+                    onChange={e => setWriteAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (!graded) gradeWriteWord(idx) } }}
+                    className="w-full rounded-lg border-2 px-4 py-3 font-sans text-lg outline-none"
+                    style={{ borderColor, backgroundColor: bg, color: 'var(--ink)' }}
+                    autoFocus={idx === 0}
+                  />
+                  {graded && !correct && (
+                    <div className="mt-2 text-sm font-semibold" style={{ color: '#16a34a' }}>
+                      ✓ {word.french}
+                    </div>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  placeholder="Französisch..."
-                  value={idx === wordWriteIdx ? userInput : (idx < wordWriteIdx ? current.words[idx].french : '')}
-                  onChange={e => idx === wordWriteIdx && setUserInput(e.target.value)}
-                  disabled={idx !== wordWriteIdx || revealed}
-                  className="w-full rounded-lg border px-4 py-3 font-sans text-lg outline-none"
-                  style={{
-                    borderColor: 'var(--line)',
-                    backgroundColor: idx === wordWriteIdx ? 'white' : 'var(--line-soft)',
-                    color: 'var(--ink)',
-                    opacity: idx === wordWriteIdx ? 1 : 0.5,
-                  }}
-                  autoFocus={idx === wordWriteIdx}
-                />
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          <div className="flex w-full max-w-2xl gap-4">
+          {!allWriteGraded ? (
             <button
-              onClick={() => {
-                setPhase('cloze')
-                setUserInput('')
-                setRevealed(false)
-              }}
-              className="flex-1 rounded-2xl border px-6 py-3.5 font-semibold transition-colors"
-              style={{
-                borderColor: 'var(--line-soft)',
-                backgroundColor: 'var(--surface)',
-                color: 'var(--ink)',
-              }}
-              onMouseEnter={e => e.target.style.backgroundColor = 'var(--line-soft)'}
-              onMouseLeave={e => e.target.style.backgroundColor = 'var(--surface)'}
-            >
-              Zurück
-            </button>
-            <button
-              onClick={() => {
-                if (wordWriteIdx < current.words.length - 1) {
-                  setWordWriteIdx(wordWriteIdx + 1)
-                  setUserInput('')
-                } else {
-                  setRevealed(true)
-                }
-              }}
-              className="flex-1 rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+              onClick={gradeAllWrite}
+              className="w-full max-w-2xl rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
               style={{ backgroundColor: 'var(--blue)' }}
               onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
               onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
             >
-              {wordWriteIdx < current.words.length - 1 ? 'Nächstes Wort' : 'Fertig'}
+              Alle prüfen
             </button>
-          </div>
-
-          {revealed && (
-            <div className="mt-8 w-full max-w-2xl">
-              <div className="rounded-2xl border p-6" style={{ borderColor: 'var(--blue-tint-line)', backgroundColor: 'var(--blue-tint)' }}>
-                <h3 className="text-lg font-bold mb-6" style={{ color: 'var(--ink)' }}>Richtige Schreibweise</h3>
-                <div className="space-y-4">
-                  {current.words.map((word, idx) => (
-                    <div key={idx}>
-                      <div className="text-sm" style={{ color: 'var(--ink-soft)' }}>{word.german}</div>
-                      <div className="text-2xl font-semibold" style={{ color: 'var(--blue)' }}>{word.french}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button
-                onClick={handleNextBatch}
-                className="mt-6 w-full rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
-                style={{ backgroundColor: 'var(--blue)' }}
-                onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-                onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-              >
-                Weiter →
-              </button>
-            </div>
+          ) : (
+            <button
+              onClick={handleNextBatch}
+              className="w-full max-w-2xl rounded-2xl px-6 py-3.5 font-semibold text-white transition-colors"
+              style={{ backgroundColor: 'var(--blue)' }}
+              onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+              onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+            >
+              Weiter →
+            </button>
           )}
         </div>
       )}
