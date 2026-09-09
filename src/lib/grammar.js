@@ -254,6 +254,115 @@ export const FORM_ORDER = [
   'passe-simple',         // 13 literarisch – nur erkennen, zuletzt
 ]
 
+// Kontext-Hinweise pro Zeitform/Modus. Ziel: JEDER erzeugte Übungssatz soll die
+// Zeitform am Satz erkennbar machen (Signalwort/Auslöser/Begleitsatz) – statt eines
+// nackten Satzes, der auch in einer anderen Zeit stehen könnte. Wird in den
+// Satz-Generator (generateGrammarStory) eingespeist.
+//   signals : typische französische Signalwörter/Auslöser
+//   rule    : kurze deutsche Regel, welcher Kontext die Form ERZWINGT
+//   example : Beispiel-Satz (Ziel-Verb im Klartext) – zeigt den nötigen Kontext
+//   anchor  : true = braucht einen Begleitsatz/Auslöser im Klartext (Vorzeitigkeit,
+//             si-Satz, que-Auslöser …), sonst ist die Form nicht eindeutig erkennbar
+export const TENSE_CONTEXT = {
+  'present': {
+    signals: ["maintenant", "en ce moment", "aujourd'hui", "tous les jours", "souvent", "chaque matin"],
+    rule: "Gegenwart: was jetzt gerade passiert, eine Gewohnheit oder eine allgemeine Wahrheit.",
+    example: "En ce moment, je travaille dans le jardin.",
+    anchor: false,
+  },
+  'imperatif': {
+    signals: ["s'il te plaît", "tout de suite", "vite", "maintenant", "(Ausrufezeichen)"],
+    rule: "Direkte Aufforderung/Befehl an tu, nous oder vous – OHNE Subjektpronomen, oft mit Ausrufezeichen.",
+    example: "Ferme la porte, s'il te plaît !",
+    anchor: false,
+  },
+  'passe-compose': {
+    signals: ["hier", "ce matin", "hier soir", "la semaine dernière", "soudain", "tout à coup", "une fois"],
+    rule: "Eine einmalige, abgeschlossene Handlung in der Vergangenheit (etwas ist passiert).",
+    example: "Hier soir, Marie a fermé la fenêtre.",
+    anchor: false,
+  },
+  'imparfait': {
+    signals: ["autrefois", "à l'époque", "quand j'étais petit", "tous les jours (früher)", "souvent", "chaque été", "pendant que"],
+    rule: "Beschreibung, Zustand oder wiederholte Gewohnheit in der Vergangenheit (Hintergrund, „damals immer/oft“).",
+    example: "Quand j'étais petit, je jouais dans ce parc.",
+    anchor: false,
+  },
+  'plus-que-parfait': {
+    signals: ["quand (+ Passé composé)", "déjà", "avant", "ne … pas encore", "une fois que"],
+    rule: "Vorzeitigkeit in der Vergangenheit: die Handlung war schon abgeschlossen, BEVOR etwas anderes Vergangenes geschah.",
+    example: "Quand je suis arrivé à la gare, le train était parti.",
+    anchor: true,
+  },
+  'futur-proche': {
+    signals: ["bientôt", "tout de suite", "dans un instant", "ce soir", "demain", "là", "dans cinq minutes"],
+    rule: "Unmittelbare oder fest geplante Zukunft (aller + Infinitiv), oft gesprochen.",
+    example: "Attention, tu vas tomber !",
+    anchor: false,
+  },
+  'futur-simple': {
+    signals: ["demain", "l'année prochaine", "dans deux ans", "un jour", "plus tard", "bientôt"],
+    rule: "Zukunft: Vorhersage, Plan oder Versprechen (etwas wird geschehen).",
+    example: "L'année prochaine, nous voyagerons en Italie.",
+    anchor: false,
+  },
+  'futur-anterieur': {
+    signals: ["quand", "dès que", "une fois que", "lorsque", "après que", "avant demain", "d'ici là"],
+    rule: "Vollendete Zukunft: bis zu einem Zukunftspunkt schon abgeschlossen. Braucht einen zweiten Zukunftssatz (Futur simple) oder „avant/d'ici …“ als Bezug.",
+    example: "Quand tu arriveras, j'aurai fini le repas.",
+    anchor: true,
+  },
+  'conditionnel-present': {
+    signals: ["si (+ Imparfait)", "à ta place", "volontiers", "peut-être", "pourrais-tu"],
+    rule: "Höflichkeit, Wunsch oder Hypothese; typische Folge eines si-Satzes mit Imparfait.",
+    example: "Si j'avais le temps, je viendrais avec toi.",
+    anchor: true,
+  },
+  'conditionnel-passe': {
+    signals: ["si (+ Plus-que-parfait)", "à ta place", "sinon", "j'aurais dû"],
+    rule: "Irreale Vergangenheit: was WÄRE geschehen (aber nicht geschah); Folge eines si-Satzes mit Plus-que-parfait, oft Bedauern/Vorwurf.",
+    example: "Si tu étais venu, tu aurais vu le spectacle.",
+    anchor: true,
+  },
+  'subjonctif-present': {
+    signals: ["il faut que", "je veux que", "bien que", "pour que", "avant que", "il est important que", "je doute que"],
+    rule: "Nach einem Auslöser mit „que“ (Wunsch, Gefühl, Zweifel, Notwendigkeit). Der Auslöser-Hauptsatz muss dastehen.",
+    example: "Il faut que tu finisses tes devoirs.",
+    anchor: true,
+  },
+  'subjonctif-passe': {
+    signals: ["bien que", "je doute que", "je suis content que", "avant que", "quoique"],
+    rule: "Wie Subjonctif, aber die Handlung ist schon abgeschlossen (Vorzeitigkeit) – nach demselben Auslöser mit „que“.",
+    example: "Je suis content que tu sois venu.",
+    anchor: true,
+  },
+  'passe-simple': {
+    signals: ["(literarischer Erzähltext)", "soudain", "ce jour-là", "il y a bien longtemps", "alors"],
+    rule: "Literarische/erzählende Vergangenheit (Buch, Märchen), meist 3. Person – ersetzt im Erzähltext das Passé composé.",
+    example: "Ce jour-là, le roi entra dans la salle.",
+    anchor: false,
+  },
+}
+
+// Baut aus TENSE_CONTEXT den Prompt-Block für die aktuell geübte(n) Zeitform(en).
+// Rückgabe: { block, needAnchor, signals }.
+export function tenseGuidance(forms = []) {
+  const items = forms
+    .map(f => ({ f, h: TENSE_CONTEXT[f.id] }))
+    .filter(x => x.h)
+  const block = items.map(({ f, h }) => {
+    const anchor = h.anchor ? ' Diese Zeit braucht einen Begleitsatz/Auslöser im Klartext (nur das Ziel-Verb wird zur Lücke).' : ''
+    const sig = h.signals?.length ? ` Signalwörter/Auslöser: ${h.signals.join(', ')}.` : ''
+    const ex = h.example ? ` Beispiel (Ziel-Verb im Klartext, im Übungssatz wird genau dieses Verb zur Lücke): „${h.example}“` : ''
+    return `• ${f.name}: ${h.rule}${anchor}${sig}${ex}`
+  }).join('\n')
+  return {
+    block,
+    needAnchor: items.some(x => x.h.anchor),
+    signals: items.flatMap(x => x.h.signals || []),
+  }
+}
+
 // Drill-Pool: die 30 häufigsten unregelmäßigen französischen Verben.
 // Pro Übungsrunde werden 3 davon zufällig gezogen, komplett durchkonjugiert
 // und tauchen zusätzlich im Lückentext auf.

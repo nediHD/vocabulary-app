@@ -1,5 +1,6 @@
 import { jsonrepair } from 'jsonrepair'
 import { supabase } from './supabase'
+import { tenseGuidance } from './grammar'
 
 // Zentraler LLM-Aufruf über die Supabase Edge Function 'llm-chat' (Proxy).
 // Der Provider-Key (OpenAI) liegt SERVER-SEITIG als Supabase-Secret – im
@@ -283,6 +284,8 @@ export async function generateGrammarStory(opts) {
   const tenseList = tenseNames.join(' UND ')
   const allowed = new Set(verbs.map(v => grBaseKey(v.french)))
   const deByBase = new Map(verbs.map(v => [grBaseKey(v.french), v.german]))
+  const guidance = tenseGuidance(forms)
+  const maxWords = guidance.needAnchor ? 18 : 12
 
   // ---------- DURCHLAUF 1: KURZE, eigenständige Beispielsätze mit Lücken (KEINE Geschichte) ----------
   const prompt1 = `Erzeuge französische ÜBUNGSSÄTZE mit Lücken. Es ist KEINE zusammenhängende Geschichte – die Sätze sind voneinander UNABHÄNGIG und stehen jeder für sich.
@@ -293,9 +296,11 @@ ZEITFORM: In JEDEM Satz ist das Ziel-Verb in der Zeitform "${tenseList}" konjugi
 
 AUFBAU:
 - Gruppiere die Sätze in "parts" mit je 2–3 kurzen, UNABHÄNGIGEN Sätzen (kein roter Faden zwischen den Sätzen).
-- Jeder Satz ist KURZ und einfach (höchstens ~12 Wörter), natürlich und sinnvoll – gerade genug Kontext, damit die richtige Verbform klar wird.
+- Jeder Satz ist KURZ und einfach (höchstens ~${maxWords} Wörter), natürlich und sinnvoll – gerade genug Kontext, damit die richtige Verbform klar wird.
 - Pro Satz genau EINE Lücke: das konjugierte Ziel-Verb wird durch einen Platzhalter ersetzt. Nummeriere die Platzhalter PRO part neu ab {{1}} in Reihenfolge ({{1}}, {{2}}, {{3}}). An der Platzhalter-Stelle steht das Verb NICHT im Klartext.
-- Wähle je einen Kontext, der die Zeitform motiviert (Imparfait: Beschreibung/Gewohnheit; Passé composé/Passé simple: einmalige abgeschlossene Handlung; Futur/Futur proche: Zukunft; Subjonctif: nach que/il faut que …).
+- KONTEXT, der die Zeitform ERZWINGT – der Lerner muss die Zeitform AM SATZ erkennen können, nicht aus der Überschrift raten. Jeder Satz enthält das passende Signalwort bzw. den nötigen Begleitsatz für die Zielzeitform:
+${guidance.block}${guidance.needAnchor ? `
+- PFLICHT bei Zeitformen mit „Begleitsatz“: Schreibe den Bezug (z. B. den quand-/dès que-/si-/que-Teil oder ein „déjà/avant“) im KLARTEXT in DENSELBEN Satz; nur das Ziel-Verb wird zur Lücke. Ohne diesen Bezug wäre die Zeitform am Satz nicht erkennbar und der Satz wäre unbrauchbar.` : ''}
 - Decke über ALLE Sätze verschiedene grammatische Personen ab (je, tu, il/elle, nous, vous, ils/elles) – nicht immer nur „il".
 - Formuliere die Sätze BEJAHT: KEINE Verneinung (ne … pas/plus/jamais/rien) rund um die Lücke. Sonst zerreißt „ne … pas" bei zusammengesetzten Zeiten die Verbform („n'a pas pris") und passt nicht mehr in EINE Lücke.
 
@@ -363,6 +368,8 @@ WICHTIG: einfache 'Anführungszeichen', niemals doppelte im Text. Antworte NUR m
   const prompt2 = `Du bist Französisch-Grammatik-Experte. Für JEDEN Eintrag unten gib die KORREKTE Konjugation und eine Begründung. Konjugiere GENAU das angegebene Verb (base), niemals ein anderes.
 
 ${listStr}
+${guidance.signals.length ? `
+Typische Signalwörter/Auslöser dieser Zeitform: ${guidance.signals.join(', ')}. Nenne in "reason" möglichst das im Kontextsatz TATSÄCHLICH vorhandene Signalwort bzw. den Auslöser (quand/dès que/si/que …) – nicht erfundene.` : ''}
 
 Für jeden Eintrag (gleiche Reihenfolge, gleiche Anzahl) gib zurück:
 - "answer": die grammatikalisch korrekte französische Form von base in der angegebenen Zeitform + Person. NUR der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip zusammen (z. B. "était tortillée"); Futur proche = "aller(konjugiert) + Infinitiv" (z. B. "vais ballotter"). OHNE Pronomen (se/s'/m' …), OHNE Adverbien. ACCORD: Bei „être"-Verben und reflexiven Verben das Partizip in Geschlecht/Zahl an das Subjekt angleichen (elle est allée, ils sont partis, elle s'est lavée).
