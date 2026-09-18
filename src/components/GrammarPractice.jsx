@@ -270,10 +270,11 @@ export default function GrammarPractice({ setView, setInSession }) {
       const all = data || []
       const due = all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
 
-      // Immer 10 Verben pro Runde anvisieren – unabhängig davon, wie viele gerade
-      // fällig sind (0, 3, 6 …). Zuerst die fälligen nehmen, dann mit den als
-      // Nächstes anstehenden Verben auf 10 auffüllen.
-      let pool = pickN(due, due.length)
+      // Immer genau max. 10 Verben pro Runde – unabhängig davon, wie viele gerade
+      // fällig sind (0, 3, 6, 23 …). Sind mehr als 10 fällig, werden nur 10
+      // gezogen; sind es weniger, wird mit den als Nächstes anstehenden
+      // Verben auf 10 aufgefüllt.
+      let pool = pickN(due, Math.min(due.length, TARGET_DUE))
       if (pool.length < TARGET_DUE) {
         const dueIds = new Set(due.map(c => c.id))
         const rest = all.filter(c => !dueIds.has(c.id)).sort((x, y) => {
