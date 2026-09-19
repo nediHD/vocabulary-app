@@ -459,7 +459,13 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
   const DELIM = "\\s('\"«.,;:!?–—\u2019-"
   const AUX_END = new RegExp(`(^|[${DELIM}])(${AUX_ALT})\\s+$`, 'i')       // Hilfsverb direkt vor der Lücke
   const AUX_LEAD = new RegExp(`^(?:${AUX_ALT})(?=\\s|$)`, 'i')             // answer beginnt mit Hilfsverb
-  const AUX_ANY = new RegExp(`(?:^|[^0-9A-Za-zÀ-ÿ])(?:${AUX_ALT})(?![0-9A-Za-zÀ-ÿ])`, 'i')
+  // Kleinwörter, die zwischen Hilfsverb und Lücke stehen dürfen (Verneinung,
+  // Pronomen, Adverbien) – nur dann gehört das Hilfsverb zu DIESER Lücke.
+  const AUX_GAP = "(?:ne|n['’]|pas|plus|jamais|rien|gu[èe]re|point|d[ée]j[àa]|toujours|souvent|encore|bien|mal|presque|vraiment|tout|toute|tous|toutes|aussi|enfin|alors|d[èe]s|m['’]|t['’]|s['’]|l['’]|me|te|se|nous|vous|le|la|les|lui|leur|y|en)"
+  // Hilfsverb steht unmittelbar (nur durch Kleinwörter getrennt) VOR der Lücke.
+  // Bewusst NICHT „irgendwo im Satz“ – sonst greift z. B. das „ai“ aus „j'ai quitté …“
+  // fälschlich und das echte Hilfsverb der Lücke („avais“) würde entfernt.
+  const AUX_NEAR = new RegExp(`(^|[${DELIM}])(${AUX_ALT})(?:\\s+${AUX_GAP})*\\s*$`, 'i')
   const REFL_LEAD = /^(?:me|te|se|nous|vous)\b\s+|^[mts]['’]\s*/i
   const REFL_END = /(?:\b(?:me|te|se|nous|vous)|[mts]['’])\s*$/i
   const IMP_POST = /^\s*-\s*(?:toi|moi|nous|vous|le|la|les|lui|leur|y|en)\b/i
@@ -503,8 +509,8 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
         if (m) {
           before = before.replace(AUX_END, '$1')                     // Doppel-Hilfsverb aus dem Text raus
           if (!AUX_LEAD.test(ans)) ans = `${m[2].toLowerCase()} ${ans}`.replace(/\s+/g, ' ').trim()
-        } else if (AUX_LEAD.test(ans) && AUX_ANY.test(before)) {
-          ans = ans.replace(AUX_LEAD, '').trim()                     // Hilfsverb steht schon woanders im Satz
+        } else if (AUX_LEAD.test(ans) && AUX_NEAR.test(before)) {
+          ans = ans.replace(AUX_LEAD, '').trim()                     // Hilfsverb steht direkt vor der Lücke schon im Text
         }
       }
 
