@@ -473,3 +473,98 @@ export function topicPath(sectionId, groupId, topicId) {
   if (!s || !g || !t) return null
   return { section: s, group: g, topic: t, key: `${sectionId}/${groupId}/${topicId}` }
 }
+
+// ---- „Welche Zeit passt?" – Zeitform-Unterscheidung (Auswahl statt Formbildung) ----
+//
+// Anders als „Grammatik üben" (dort ist die Zeitform vorgegeben und man bildet die
+// FORM) trainiert diese Übung die ENTSCHEIDUNG: Welche Zeit/welcher Modus passt in
+// diesen Satz – und warum? Verwechselt werden Zeiten immer nur INNERHALB ihrer
+// „Familie", deshalb sind die Antwort-Optionen pro Familie genau die verwechselbaren
+// Zeiten (nicht zufällig). Der SRS-Fortschritt läuft über dieselbe Tabelle wie bei
+// den Formen (form_progress), aber mit dem Schlüssel `contrast:<id>`.
+//
+// Jede Familie:
+//   id, name, icon, short   – Anzeige im Menü
+//   options[]               – exakte Antwort-Buttons (Zeitform-Namen)
+//   hints[{name,rule}]      – deutsche Kurzregel je Option (füttert den Generator)
+//   promptExtra             – familienspezifische Bau-Anweisung an den Generator
+export const CONTRAST_FAMILIES = [
+  {
+    id: 'past', name: 'Vergangenheit', icon: '🕐',
+    short: 'Passé composé · Imparfait · Plus-que-parfait',
+    options: ['Passé composé', 'Imparfait', 'Plus-que-parfait'],
+    hints: [
+      { name: 'Passé composé', rule: 'Einmalige, abgeschlossene Handlung in der Vergangenheit (etwas ist passiert). Signale: hier, soudain, tout à coup, une fois, ce matin, hier soir.' },
+      { name: 'Imparfait', rule: 'Beschreibung, Zustand oder Gewohnheit/Wiederholung in der Vergangenheit (Hintergrund, „damals immer/oft"). Signale: autrefois, tous les jours, souvent, quand j\'étais petit, pendant que, chaque été.' },
+      { name: 'Plus-que-parfait', rule: 'Vorzeitig: schon abgeschlossen, BEVOR etwas anderes Vergangenes geschah. Signale: déjà, avant, quand + Passé composé, une fois que, ne … pas encore.' },
+    ],
+    promptExtra: 'Baue einen klaren Vergangenheits-Kontext. Für Plus-que-parfait MUSS ein zweiter Vergangenheitsbezug im Klartext im Satz stehen (z. B. „Quand je suis arrivé, …" oder „déjà"), sonst wäre es nicht eindeutig.',
+  },
+  {
+    id: 'future', name: 'Zukunft', icon: '🔮',
+    short: 'Futur proche · Futur simple · Futur antérieur',
+    options: ['Futur proche', 'Futur simple', 'Futur antérieur'],
+    hints: [
+      { name: 'Futur proche', rule: 'Unmittelbare oder fest geplante Zukunft (aller + Infinitiv), oft gesprochen. Signale: bientôt, tout de suite, dans un instant, là, attention, regarde, dans cinq minutes.' },
+      { name: 'Futur simple', rule: 'Vorhersage, Plan oder Versprechen (entferntere Zukunft). Signale: demain, l\'année prochaine, dans deux ans, un jour, plus tard.' },
+      { name: 'Futur antérieur', rule: 'Vollendete Zukunft: bis zu einem Zukunftspunkt schon abgeschlossen. Braucht einen zweiten Zukunftssatz. Signale: quand/dès que/une fois que/lorsque + Futur, avant demain, d\'ici là.' },
+    ],
+    promptExtra: 'Für Futur antérieur MUSS ein zweiter Zukunftsbezug im Klartext im Satz stehen (z. B. „Quand tu arriveras, …" oder „d\'ici demain"), sonst wäre es nicht eindeutig.',
+  },
+  {
+    id: 'mood', name: 'Modus (Indicatif / Subjonctif)', icon: '🎭',
+    short: 'Indicatif vs. Subjonctif',
+    options: ['Indicatif', 'Subjonctif'],
+    hints: [
+      { name: 'Indicatif', rule: 'Tatsache, Sicherheit oder Meinung im bejahten Satz. Auslöser vor „que": je pense que, je sais que, j\'espère que, il est certain que, je crois que, parce que.' },
+      { name: 'Subjonctif', rule: 'Wunsch, Gefühl, Zweifel, Notwendigkeit oder bestimmte Konjunktionen. Auslöser vor „que": il faut que, je veux que, bien que, pour que, avant que, je doute que, je suis content que, il est important que.' },
+    ],
+    promptExtra: 'Jeder Satz hat einen Auslöser-Hauptsatz + „que", danach folgt die Lücke (das Verb im Nebensatz). Der Auslöser entscheidet eindeutig zwischen Indicatif und Subjonctif und steht im Klartext.',
+  },
+  {
+    id: 'si', name: 'Si-Sätze (Bedingung)', icon: '❓',
+    short: 'Welche Zeit im Hauptsatz?',
+    options: ['Futur simple', 'Conditionnel présent', 'Conditionnel passé'],
+    hints: [
+      { name: 'Futur simple', rule: 'Typ 1 (real/möglich): „Si + présent" → Hauptsatz im Futur simple. Bsp: Si tu viens, je serai content.' },
+      { name: 'Conditionnel présent', rule: 'Typ 2 (irreal Gegenwart): „Si + imparfait" → Hauptsatz im Conditionnel présent. Bsp: Si j\'avais le temps, je viendrais.' },
+      { name: 'Conditionnel passé', rule: 'Typ 3 (irreal Vergangenheit): „Si + plus-que-parfait" → Hauptsatz im Conditionnel passé. Bsp: Si tu étais venu, tu aurais vu le spectacle.' },
+    ],
+    promptExtra: 'Der si-Nebensatz steht IMMER vollständig im Klartext im Satz (er ist das Signal). Die Lücke ist NUR das Verb im HAUPTSATZ. Die Zeit des si-Satzes (présent / imparfait / plus-que-parfait) entscheidet eindeutig.',
+  },
+]
+
+export function contrastFamilyById(id) {
+  return CONTRAST_FAMILIES.find(f => f.id === id) || null
+}
+
+// Die Zeitform-Wahl-Themen als geübte „Formen" (Positionen 14–17), damit sie in
+// DERSELBEN Lern-Reihenfolge und im SELBEN SRS laufen wie die 13 konjugierten Formen.
+// `kind:'contrast'` unterscheidet sie vom Formbildungs-Drill (kind:'form').
+// Die `id` ist zugleich der SRS-Schlüssel (form_progress.form_key) – mit Präfix
+// `contrast:`, damit es nie mit einer Formbildungs-id kollidiert.
+// `family` verweist auf CONTRAST_FAMILIES; 'mixed' mischt alle Familien (inkl. Si-Sätze).
+export const CONTRAST_ITEMS = [
+  { id: 'contrast:past',   family: 'past',   name: 'Vergangenheit – welche Zeit?', kind: 'contrast' },
+  { id: 'contrast:future', family: 'future', name: 'Zukunft – welche Zeit?',        kind: 'contrast' },
+  { id: 'contrast:mood',   family: 'mood',   name: 'Modus – Indicatif / Subjonctif', kind: 'contrast' },
+  { id: 'contrast:mixed',  family: 'mixed',  name: 'Gemischt – alle Zeiten',        kind: 'contrast' },
+]
+
+// Für eine Zeitform-Wahl-Runde: die zu mischenden Familien. 'mixed' = alle
+// (inkl. Si-Sätze), sonst genau die eine Familie.
+export function contrastFamiliesFor(family) {
+  if (family === 'mixed') return CONTRAST_FAMILIES
+  const f = contrastFamilyById(family)
+  return f ? [f] : []
+}
+
+// Der komplette geübte Lern-Pfad: 13 konjugierte Formen (kind:'form') + 4
+// Zeitform-Wahl-Themen (kind:'contrast'), in dieser Reihenfolge. Wird von der
+// Ziel-Auswahl (pickTargetForm) und vom Fortschritts-Überblick genutzt.
+export function orderedPracticeItems() {
+  return [
+    ...orderedForms().map(f => ({ ...f, kind: 'form' })),
+    ...CONTRAST_ITEMS,
+  ]
+}

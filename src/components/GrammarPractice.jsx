@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { orderedForms, IRREGULAR_VERBS, REGULAR_ER, REGULAR_IR, REGULAR_RE } from '../lib/grammar'
+import { orderedPracticeItems, IRREGULAR_VERBS, REGULAR_ER, REGULAR_IR, REGULAR_RE } from '../lib/grammar'
 import { generateGrammarStory, conjugateVerbs, personLabel } from '../lib/groq'
 import { Explanation, useTheory } from './Grammar'
+import ContrastPractice from './ContrastPractice'
 
 const ALL_PERSONS = ['1sg', '2sg', '3sg', '1pl', '2pl', '3pl']
 const NUM_PARTS = 7
@@ -202,7 +203,9 @@ export function pickTargetForm(forms, progressRows) {
 // Speichert das Selbst-Urteil zur Zielform.
 //  verstanden      → Status 'review', längeres Intervall (gilt als gelernt).
 //  nicht verstanden → Status 'learning', sofort wieder fällig (NICHT gelernt).
-async function gradeForm(form, understood) {
+// Wird auch von der Zeitform-Wahl (ContrastPractice) genutzt – gleicher SRS,
+// gleiche Tabelle (form_progress), nur mit contrast:-Schlüssel.
+export async function gradeForm(form, understood) {
   if (!form) return
   const { data } = await supabase.from('form_progress').select('interval_days').eq('form_key', form.id).maybeSingle()
   const prev = data?.interval_days || 0
@@ -229,9 +232,10 @@ async function gradeForm(form, understood) {
 }
 
 export default function GrammarPractice({ setView, setInSession }) {
-  const [phase, setPhase] = useState('loading') // loading | generating | theory | run | finished | error | none
+  const [phase, setPhase] = useState('loading') // loading | generating | theory | run | finished | error | none | contrast
   const [error, setError] = useState('')
   const [form, setForm] = useState(null)          // die eine Zielform dieser Runde
+  const [contrastTarget, setContrastTarget] = useState(null) // gesetzt, wenn die Zielform eine Zeitform-Wahl (14–17) ist
   const [verbs, setVerbs] = useState([])          // fällige DB-Verben (für die Lücken)
   const [drillRows, setDrillRows] = useState([])  // 3 unregelmäßige, vorkonjugiert
 
@@ -258,6 +262,23 @@ export default function GrammarPractice({ setView, setInSession }) {
       setPhase('loading')
       setError('')
       setGraded(false)
+
+      // Zielthema nach SRS bestimmen – über den GESAMTEN Lern-Pfad: die 13
+      // konjugierten Formen (kind:'form') UND die 4 Zeitform-Wahl-Themen (kind:'contrast',
+      // Positionen 14–17). Beide laufen im selben SRS (form_progress).
+      const { data: progressRows } = await supabase.from('form_progress').select('*')
+      const target = pickTargetForm(orderedPracticeItems(), progressRows || [])
+
+      // Ist das nächste Thema eine Zeitform-WAHL (14–17), übernimmt die MC-Übung
+      // (ContrastPractice) – dort wird generiert, geübt und benotet.
+      if (target?.kind === 'contrast') {
+        setForm(target)
+        setContrastTarget(target)
+        setPhase('contrast')
+        return
+      }
+      setContrastTarget(null)
+
       const now = new Date().toISOString()
       const { data, error: err } = await supabase
         .from('cards')
@@ -288,9 +309,7 @@ export default function GrammarPractice({ setView, setInSession }) {
       if (pool.length === 0) { setPhase('none'); return }
       const dueVerbs = pool.map(c => ({ french: c.french, german: c.german }))
 
-      // Zielform nach Form-SRS bestimmen.
-      const { data: progressRows } = await supabase.from('form_progress').select('*')
-      const target = pickTargetForm(orderedForms(), progressRows || [])
+      // (Zielform `target` wurde oben bereits per SRS bestimmt.)
 
       // Drill-Verben ziehen: je 1 regelmäßiges pro Endungs-Gruppe (-er, -ir, -re)
       // zum Endungen-Üben + immer 3 unregelmäßige.
@@ -379,7 +398,19 @@ export default function GrammarPractice({ setView, setInSession }) {
 
   // ---------- Basiszustände ----------
   if (phase === 'loading') {
-    return <div className="text-center py-20"><p style={{ color: 'var(--ink-soft)' }}>Fällige Verben werden geladen…</p></div>
+    return <div className="text-center py-20"><p style={{ color: 'var(--ink-soft)' }}>Nächstes Thema wird geladen…</p></div>
+  }
+
+  // Zeitform-WAHL (14–17): eigene MC-Übung, gleicher SRS.
+  if (phase === 'contrast' && contrastTarget) {
+    return (
+      <ContrastPractice
+        target={contrastTarget}
+        setView={setView}
+        setInSession={setInSession}
+        onNext={load}
+      />
+    )
   }
 
   if (phase === 'generating') {

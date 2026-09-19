@@ -1,6 +1,6 @@
 import { jsonrepair } from 'jsonrepair'
 import { supabase } from './supabase'
-import { tenseGuidance } from './grammar'
+import { tenseGuidance, contrastFamilyById } from './grammar'
 
 // Zentraler LLM-Aufruf über die Supabase Edge Function 'llm-chat' (Proxy).
 // Der Provider-Key (OpenAI) liegt SERVER-SEITIG als Supabase-Secret – im
@@ -553,6 +553,101 @@ Antworte NUR mit gültigem JSON ohne Markdown, GLEICHE Reihenfolge und Anzahl wi
 
   if (runs.length === 0) throw new Error('Groq: Keine Runs erzeugt')
   return { title, runs }
+}
+
+// ---- „Welche Zeit passt?" – Auswahl-Übung zur Zeitform-Unterscheidung ----
+// Erzeugt mehrere unabhängige Übungssätze mit EINER Lücke (___). Der Lerner wählt
+// aus den (pro Familie festen) Optionen die richtige Zeit/den richtigen Modus. Jeder
+// Satz trägt das Signalwort im Klartext, damit die Zeit AM SATZ eindeutig erkennbar ist.
+//
+// opts: { families:[familyConfig], count:number }  (mehrere families = „Gemischt")
+// return: { items:[{ familyId, familyName, options[], sentence, verb, de, answer, solution, signal, reason }] }
+export async function generateTenseChoice(opts) {
+  const { families = [], count = 8 } = opts || {}
+  if (families.length === 0) throw new Error('generateTenseChoice: keine Familie angegeben')
+
+  // Wie viele Sätze pro Familie (gleichmäßig verteilt).
+  const perFam = {}
+  for (let i = 0; i < count; i++) {
+    const id = families[i % families.length].id
+    perFam[id] = (perFam[id] || 0) + 1
+  }
+  const distribution = families.map(f => `${perFam[f.id] || 0}× Familie "${f.id}"`).join(', ')
+
+  const famBlocks = families.map(f => {
+    const opts2 = f.options.map(o => `"${o}"`).join(', ')
+    const hints = f.hints.map(h => `   - ${h.name}: ${h.rule}`).join('\n')
+    return `FAMILIE "${f.id}" (${f.name}) – "answer" MUSS exakt einer dieser Strings sein: ${opts2}\n${hints}\n   BAUHINWEIS: ${f.promptExtra}`
+  }).join('\n\n')
+
+  const famIds = families.map(f => f.id)
+  const prompt = `Du erstellst eine Französisch-Übung zum ERKENNEN der richtigen Zeitform bzw. des richtigen Modus. Der Lerner sieht einen Satz mit EINER Lücke (___) und wählt, welche Zeit/welcher Modus dort hingehört (er tippt NICHTS). Erzeuge GENAU ${count} unabhängige Übungssätze.
+
+VERTEILUNG (so viele Sätze je Familie): ${distribution}.
+
+${famBlocks}
+
+REGELN für JEDEN Satz:
+- Genau EINE Lücke, geschrieben als drei Unterstriche ___ an der Stelle des Ziel-Verbs. Das Verb steht dort NICHT im Klartext.
+- Der Satz enthält im KLARTEXT das Signalwort / den Kontext, der die richtige Zeit EINDEUTIG erzwingt. Man muss die Zeit AM SATZ erkennen können, nicht raten.
+- Kurz und natürlich (höchstens ~14 Wörter). Wechsle die grammatische Person (je, tu, il/elle, nous, vous, ils/elles) – nicht immer „il".
+- KEINE Verneinung rund um die Lücke (sonst zerreißt „ne … pas" die Verbform).
+- Vorangestellte Pronomen (se, s', me, te, le, lui, y, en …) bleiben als Klartext VOR der Lücke; die Lücke ist nur der Verbteil.
+- Wechsle die richtige Antwort ab – nicht immer dieselbe Zeit.
+
+Für JEDEN Satz gib zurück:
+- "family": die Familien-id (${famIds.map(x => `"${x}"`).join(' oder ')})
+- "sentence": der Satz mit ___ als Lücke
+- "verb": der Infinitiv des Ziel-Verbs
+- "de": die deutsche Bedeutung des Verbs
+- "answer": die richtige Zeit/Modus – EXAKT einer der erlaubten Antwort-Strings dieser Familie
+- "solution": die korrekt konjugierte Verbform für die Lücke (nur der Verbteil: zusammengesetzte Zeiten = Hilfsverb+Partizip; Futur proche = "va/vais…"+Infinitiv; OHNE Pronomen)
+- "signal": das genaue Signalwort/der Auslöser aus dem Satz (Teilstring aus "sentence")
+- "reason": kurze deutsche Begründung (1 Satz), die das Signal nennt und erklärt, warum diese Zeit passt
+
+Einfache 'Anführungszeichen' im Text, niemals doppelte. Antworte NUR mit gültigem JSON ohne Markdown:
+{"items":[{"family":"past","sentence":"Hier soir, Marie ___ la fenêtre.","verb":"fermer","de":"schließen","answer":"Passé composé","solution":"a fermé","signal":"Hier soir","reason":"„Hier soir" markiert eine einmalige, abgeschlossene Handlung an einem festen Zeitpunkt → Passé composé."}]}`
+
+  let raw
+  try { raw = parseGroqJSON(await callGroq(prompt, { maxTokens: 3200, temperature: 0.6 })) }
+  catch { raw = parseGroqJSON(await callGroq(prompt, { maxTokens: 3200, temperature: 0.4 })) }
+
+  const optNorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '')
+  const items = (Array.isArray(raw?.items) ? raw.items : [])
+    .map(it => {
+      const famId = String(it.family || (families.length === 1 ? families[0].id : '')).trim()
+      const fam = contrastFamilyById(famId) || (families.length === 1 ? families[0] : null)
+      if (!fam) return null
+      let sentence = String(it.sentence || '').trim()
+      // Lücken-Platzhalter vereinheitlichen → ___
+      sentence = sentence
+        .replace(/\{\{\s*\d*\s*\}\}/g, '___')
+        .replace(/\[\s*(?:\.\.\.|…)\s*\]/g, '___')
+        .replace(/_{2,}/g, '___')
+      if (!sentence.includes('___')) return null
+      // Antwort exakt oder tolerant (Groß/Klein, Akzente) auf eine Option abbilden.
+      const rawAns = String(it.answer || '').trim()
+      const answer = fam.options.includes(rawAns)
+        ? rawAns
+        : fam.options.find(o => optNorm(o) === optNorm(rawAns))
+      if (!answer) return null
+      return {
+        familyId: fam.id,
+        familyName: fam.name,
+        options: fam.options,
+        sentence,
+        verb: String(it.verb || '').trim(),
+        de: String(it.de || '').trim(),
+        answer,
+        solution: String(it.solution || '').trim(),
+        signal: String(it.signal || '').trim(),
+        reason: String(it.reason || '').trim(),
+      }
+    })
+    .filter(Boolean)
+
+  if (items.length === 0) throw new Error('Groq: Keine Übungssätze erzeugt')
+  return { items }
 }
 
 // ---- Volle Konjugation mehrerer Verben in EINER Zeitform (für den Drill) ----

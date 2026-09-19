@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { orderedForms } from '../lib/grammar'
+import { orderedPracticeItems } from '../lib/grammar'
 import { pickTargetForm } from './GrammarPractice'
 
 // Status einer Zeitform aus ihrem Fortschritts-Eintrag ableiten.
@@ -38,7 +38,7 @@ export default function FormOverview({ setView }) {
     }
   }
 
-  const forms = orderedForms()
+  const forms = orderedPracticeItems()
   const nowMs = Date.now()
   const prog = new Map(rows.map(r => [r.form_key, r]))
   const nextId = forms.length ? pickTargetForm(forms, rows)?.id : null
@@ -49,7 +49,8 @@ export default function FormOverview({ setView }) {
       <button onClick={() => setView('dashboard')} className="mb-5 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>← Zurück</button>
       <h1 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Zeitform-Fortschritt</h1>
       <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
-        Alle 13 Zeitformen in Lern-Reihenfolge. Markiert ist, welche als Nächstes dran ist.
+        Erst die {forms.filter(f => f.kind !== 'contrast').length} Zeitformen (Form bilden), danach die Zeitform-Wahl
+        (welche Zeit passt?) – in Lern-Reihenfolge. Markiert ist, was als Nächstes dran ist.
       </p>
 
       {loading ? (
@@ -88,7 +89,10 @@ export default function FormOverview({ setView }) {
                   }}>
                   <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full font-mono text-xs font-bold"
                     style={{ backgroundColor: 'var(--surface-2)', color: 'var(--ink-faint)' }}>{i + 1}</span>
-                  <span className="flex-1 font-semibold" style={{ color: 'var(--ink)' }}>{f.name}</span>
+                  <span className="flex-1 font-semibold" style={{ color: 'var(--ink)' }}>
+                    {f.kind === 'contrast' && <span title="Zeitform-Wahl" className="mr-1.5">🔀</span>}
+                    {f.name}
+                  </span>
                   {st.key === 'scheduled' && !isNext && (
                     <span className="font-mono text-[11px]" style={{ color: 'var(--ink-faint)' }}>in {st.days} T.</span>
                   )}

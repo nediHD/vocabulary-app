@@ -142,7 +142,7 @@ export default function Dashboard({ setView, setInSession }) {
         >
           <span>Grammatik üben ✍️</span>
           <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Verben · Zeitformen →
+            Formen · Zeitform-Wahl →
           </span>
         </button>
 
