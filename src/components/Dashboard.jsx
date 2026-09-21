@@ -60,7 +60,7 @@ export default function Dashboard({ setView, setInSession }) {
       alert('Keine Wörter fällig.')
       return
     }
-    setView('review')
+    setView('sentences')
   }
 
   if (loading) {
@@ -73,23 +73,6 @@ export default function Dashboard({ setView, setInSession }) {
         <p className="text-sm font-medium mb-2" style={{ color: 'var(--ink-faint)' }}>Guten Tag 👋</p>
         <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--ink)' }}>Dein Vokabular</h1>
         <p style={{ color: 'var(--ink-soft)' }}>Bereit zum Lernen?</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4">
-        <div className="rounded-3xl border p-5" style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)' }}>
-          <div className="font-mono text-3xl font-semibold" style={{ color: 'var(--ink)' }}>{stats.total}</div>
-          <div className="mt-1 text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--ink-faint)' }}>
-            Wörter insgesamt
-          </div>
-        </div>
-
-        <div className="aurora-cta rounded-3xl border-0 p-5">
-          <div className="font-mono text-3xl font-semibold">{stats.dueToday}</div>
-          <div className="mt-1 text-xs font-medium uppercase tracking-wider opacity-80">
-            Heute fällig
-          </div>
-        </div>
       </div>
 
       {/* Action Buttons */}
@@ -162,36 +145,6 @@ export default function Dashboard({ setView, setInSession }) {
         </button>
 
         {sectionLabel('Weiteres')}
-        <button
-          onClick={() => setView('audio')}
-          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--line-soft)',
-            color: 'var(--ink)',
-          }}
-        >
-          <span>Hören 🎧</span>
-          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Video &amp; Podcast →
-          </span>
-        </button>
-
-        <button
-          onClick={() => setView('sentences')}
-          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--line-soft)',
-            color: 'var(--ink)',
-          }}
-        >
-          <span>Lückentext ✏️</span>
-          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Text schreiben →
-          </span>
-        </button>
-
         <button
           onClick={() => setView('words')}
           className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
