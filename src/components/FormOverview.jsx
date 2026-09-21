@@ -47,7 +47,7 @@ export default function FormOverview({ setView }) {
   return (
     <div className="mx-auto max-w-2xl py-6">
       <button onClick={() => setView('dashboard')} className="mb-5 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>← Zurück</button>
-      <h1 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Zeitform-Fortschritt</h1>
+      <h1 className="mb-2 text-3xl font-bold" style={{ color: 'var(--ink)' }}>Zeitformen meistern</h1>
       <p className="mb-6 text-sm" style={{ color: 'var(--ink-soft)' }}>
         Erst die {forms.filter(f => f.kind !== 'contrast').length} Zeitformen (Form bilden), danach die Zeitform-Wahl
         (welche Zeit passt?) – in Lern-Reihenfolge. Markiert ist, was als Nächstes dran ist.

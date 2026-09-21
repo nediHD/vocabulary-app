@@ -115,21 +115,6 @@ export default function Dashboard({ setView, setInSession }) {
         </button>
 
         <button
-          onClick={() => setView('grammar-practice')}
-          className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--line-soft)',
-            color: 'var(--ink)',
-          }}
-        >
-          <span>Grammatik üben ✍️</span>
-          <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Formen · Zeitform-Wahl →
-          </span>
-        </button>
-
-        <button
           onClick={() => setView('form-overview')}
           className="lift flex items-center justify-between rounded-2xl px-6 py-3.5 font-semibold sm:h-16 border"
           style={{
@@ -138,9 +123,9 @@ export default function Dashboard({ setView, setInSession }) {
             color: 'var(--ink)',
           }}
         >
-          <span>Zeitform-Fortschritt 📊</span>
+          <span>Zeitformen meistern 📊</span>
           <span className="font-mono text-sm" style={{ color: 'var(--blue)' }}>
-            Nächste Form →
+            Fortschritt →
           </span>
         </button>
 
