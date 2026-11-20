@@ -19,6 +19,19 @@ export const PODCAST_EPISODES = [
       'se rendre compte', 'avoir honte', "d'un bond", 'faire les cent pas', 'dès que', 'désormais',
     ],
   },
+  {
+    id: 2,
+    title: 'Le passé composé (B) – Le tablier de Mamie Odile',
+    tense: 'Passé composé',
+    formId: 'passe-compose',
+    audio: 'podcast/folge_02.mp3',
+    words: [
+      'repérer', "s'entrechoquer", "s'étirer", 'crocheter', 'somnoler', 'vomir', 'se redresser',
+      'le chancre', "l'accès de colère", 'le don', 'le tablier', 'le recoin', 'le deuil', 'le tarin',
+      'translucide', 'railleur', 'plié', 'mal ourlé', 'tassé contre',
+      "ne pas avoir l'air dans son assiette", 'tenir la route', 'être à côté de la plaque', 'au fil de',
+    ],
+  },
 ]
 
 export function episodeById(id) {
