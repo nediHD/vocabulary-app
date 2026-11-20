@@ -9,12 +9,15 @@ import Grammar from './components/Grammar'
 import GrammarPractice from './components/GrammarPractice'
 import FormOverview from './components/FormOverview'
 import Services from './components/Services'
+import Podcast from './components/Podcast'
+import { episodeById } from './lib/podcast'
 import PasswordGate from './components/PasswordGate'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
   const [inSession, setInSession] = useState(false)
   const [authenticated, setAuthenticated] = useState(false)
+  const [podcastEpisode, setPodcastEpisode] = useState(null)
 
   useEffect(() => {
     if (localStorage.getItem('appAuth') === 'true') {
@@ -44,6 +47,17 @@ export default function App() {
         return <FormOverview setView={setView} />
       case 'services':
         return <Services setView={setView} />
+      case 'podcast':
+        return <Podcast setView={setView} setPodcastEpisode={setPodcastEpisode} />
+      case 'podcast-practice':
+        // Wörter der Folge (gleiche Übung wie „Wiederholung"), danach Grammatik
+        return <SentenceLearning key="pc-words" setView={setView} setInSession={setInSession}
+          episode={episodeById(podcastEpisode)} onContinue={() => setView('podcast-grammar')} />
+      case 'podcast-grammar':
+        return <GrammarPractice key="pc-grammar" setView={setView} setInSession={setInSession}
+          forceFormId={episodeById(podcastEpisode)?.formId}
+          forceVerbs={episodeById(podcastEpisode)?.words}
+          onDone={() => setView('podcast')} />
       default:
         return <Dashboard setView={setView} setInSession={setInSession} />
     }

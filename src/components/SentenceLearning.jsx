@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { generateCloze } from '../lib/groq'
 import { reinsertAt } from '../utils/queue'
 import QuizCard from './QuizCard'
+import { fetchEpisodeCards } from '../lib/podcast'
 
 function nextDirection(current) {
   return current === 'de→fr' ? 'fr→de' : 'de→fr'
@@ -34,7 +35,7 @@ function DaysToast({ days }) {
   )
 }
 
-export default function SentenceLearning({ setView, setInSession }) {
+export default function SentenceLearning({ setView, setInSession, episode = null, onContinue = null }) {
   const [batches, setBatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingStep, setLoadingStep] = useState('')
@@ -88,17 +89,28 @@ export default function SentenceLearning({ setView, setInSession }) {
       setLoadingStep('Wörter werden geladen...')
       const now = new Date().toISOString()
 
-      const { data, error: err } = await supabase
-        .from('cards')
-        .select('*')
-        .eq('status', 'review')
+      let dueCards
+      if (episode) {
+        // Podcast-Übung: alle Wörter der Folge, egal ob gerade fällig
+        try {
+          dueCards = await fetchEpisodeCards(episode)
+        } catch (e) {
+          setError('Fehler beim Laden der Wörter: ' + e.message)
+          return
+        }
+      } else {
+        const { data, error: err } = await supabase
+          .from('cards')
+          .select('*')
+          .eq('status', 'review')
 
-      if (err) {
-        setError('Fehler beim Laden der Wörter: ' + err.message)
-        return
+        if (err) {
+          setError('Fehler beim Laden der Wörter: ' + err.message)
+          return
+        }
+
+        dueCards = (data || []).filter(card => new Date(card.next_review_at) <= new Date(now))
       }
-
-      const dueCards = (data || []).filter(card => new Date(card.next_review_at) <= new Date(now))
 
       if (dueCards.length === 0) {
         setNoDueWords(true)
@@ -106,7 +118,7 @@ export default function SentenceLearning({ setView, setInSession }) {
         return
       }
 
-      const selected = dueCards.slice(0, 15)
+      const selected = episode ? dueCards : dueCards.slice(0, 15)
 
       // Wörter zufällig mischen (Fisher-Yates), damit die Lücken NICHT in der
       // ursprünglichen Reihenfolge der Wörter erscheinen, sondern gemischt.
@@ -316,18 +328,29 @@ export default function SentenceLearning({ setView, setInSession }) {
         <div className="mx-auto max-w-2xl text-center py-20">
           <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--ink)' }}>Wiederholung abgeschlossen! 🎉</h2>
           <p className="mb-8" style={{ color: 'var(--ink-soft)' }}>Gute Arbeit beim Wiederholen!</p>
-          <button
-            onClick={() => {
-              setInSession(false)
-              setView('dashboard')
-            }}
-            className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-            style={{ backgroundColor: 'var(--blue)' }}
-            onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
-            onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
-          >
-            Zur Übersicht
-          </button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => {
+                setInSession(false)
+                setView('dashboard')
+              }}
+              className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+              style={{ backgroundColor: 'var(--blue)' }}
+              onMouseEnter={e => e.target.style.backgroundColor = 'var(--blue-dark)'}
+              onMouseLeave={e => e.target.style.backgroundColor = 'var(--blue)'}
+            >
+              Zur Übersicht
+            </button>
+            {episode && onContinue && (
+              <button
+                onClick={onContinue}
+                className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+                style={{ backgroundColor: '#16a34a' }}
+              >
+                Weiter: Grammatik ({episode.tense}) →
+              </button>
+            )}
+          </div>
         </div>
       )
     }

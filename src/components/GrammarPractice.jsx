@@ -231,7 +231,7 @@ export async function gradeForm(form, understood) {
   }
 }
 
-export default function GrammarPractice({ setView, setInSession }) {
+export default function GrammarPractice({ setView, setInSession, forceFormId = null, forceVerbs = null, onDone = null }) {
   const [phase, setPhase] = useState('loading') // loading | generating | theory | run | finished | error | none | contrast
   const [error, setError] = useState('')
   const [form, setForm] = useState(null)          // die eine Zielform dieser Runde
@@ -267,7 +267,10 @@ export default function GrammarPractice({ setView, setInSession }) {
       // konjugierten Formen (kind:'form') UND die 4 Zeitform-Wahl-Themen (kind:'contrast',
       // Positionen 14–17). Beide laufen im selben SRS (form_progress).
       const { data: progressRows } = await supabase.from('form_progress').select('*')
-      const target = pickTargetForm(orderedPracticeItems(), progressRows || [])
+      // Podcast-Modus: feste Zeitform der Folge statt SRS-Auswahl.
+      const items = orderedPracticeItems()
+      const forced = forceFormId ? items.find(i => i.id === forceFormId) : null
+      const target = forced || pickTargetForm(items, progressRows || [])
 
       // Ist das nächste Thema eine Zeitform-WAHL (14–17), übernimmt die MC-Übung
       // (ContrastPractice) – dort wird generiert, geübt und benotet.
@@ -289,7 +292,11 @@ export default function GrammarPractice({ setView, setInSession }) {
 
       const nowMs = new Date(now).getTime()
       const all = data || []
-      const due = all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
+      // Podcast-Modus: bevorzugt die Verben der Folge (auch wenn nicht fällig).
+      const forcedSet = forceVerbs ? new Set(forceVerbs) : null
+      const due = forcedSet
+        ? all.filter(c => c.status === 'review' && forcedSet.has(c.french))
+        : all.filter(c => c.status === 'review' && c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs)
 
       // Immer genau max. 10 Verben pro Runde – unabhängig davon, wie viele gerade
       // fällig sind (0, 3, 6, 23 …). Sind mehr als 10 fällig, werden nur 10
@@ -507,9 +514,15 @@ export default function GrammarPractice({ setView, setInSession }) {
               <button onClick={() => { setInSession(false); setView('dashboard') }}
                 className="rounded-2xl border px-6 py-3 font-semibold transition-colors"
                 style={{ borderColor: 'var(--line-soft)', backgroundColor: 'var(--surface)', color: 'var(--ink)' }}>Zur Übersicht</button>
-              <button onClick={load}
-                className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
-                style={{ backgroundColor: 'var(--blue)' }}>Nächste Runde</button>
+              {onDone ? (
+                <button onClick={() => { setInSession(false); onDone() }}
+                  className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+                  style={{ backgroundColor: 'var(--blue)' }}>Zurück zum Podcast</button>
+              ) : (
+                <button onClick={load}
+                  className="rounded-2xl px-6 py-3 font-semibold text-white transition-colors"
+                  style={{ backgroundColor: 'var(--blue)' }}>Nächste Runde</button>
+              )}
             </div>
           </>
         )}
