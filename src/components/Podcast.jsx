@@ -1,5 +1,57 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PODCAST_EPISODES, audioUrl, fetchEpisodeCards } from '../lib/podcast'
+
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
+
+// Audio-Player mit ±10 s springen und Geschwindigkeit.
+function Player({ src }) {
+  const ref = useRef(null)
+  const [speed, setSpeed] = useState(1)
+
+  const skip = s => {
+    const a = ref.current
+    if (!a) return
+    a.currentTime = Math.max(0, Math.min(a.duration || Infinity, a.currentTime + s))
+  }
+  const setRate = r => {
+    setSpeed(r)
+    if (ref.current) ref.current.playbackRate = r
+  }
+
+  const btn = 'rounded-xl border px-3 py-1.5 text-sm font-semibold'
+  return (
+    <div className="mb-4">
+      <audio
+        ref={ref}
+        controls
+        preload="none"
+        src={src}
+        className="mb-2 w-full"
+        onPlay={e => { e.currentTarget.playbackRate = speed }}
+        onLoadedMetadata={e => { e.currentTarget.playbackRate = speed }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => skip(-10)} className={btn} style={{ borderColor: 'var(--line-soft)', color: 'var(--ink)' }}>⏪ 10 s</button>
+        <button onClick={() => skip(10)} className={btn} style={{ borderColor: 'var(--line-soft)', color: 'var(--ink)' }}>10 s ⏩</button>
+        <div className="ml-auto flex gap-1">
+          {SPEEDS.map(r => (
+            <button
+              key={r}
+              onClick={() => setRate(r)}
+              className="rounded-lg px-2 py-1.5 font-mono text-xs font-bold"
+              style={{
+                backgroundColor: speed === r ? 'var(--blue)' : 'var(--blue-tint)',
+                color: speed === r ? '#fff' : 'var(--blue-dark)',
+              }}
+            >
+              {r}×
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Eine Folge: Player, Wortliste (Zusatzblatt mit Übersetzung) und Start der Übung.
 function Episode({ ep, onStart }) {
@@ -18,7 +70,7 @@ function Episode({ ep, onStart }) {
       </div>
       <div className="mb-4 text-lg font-bold" style={{ color: 'var(--ink)' }}>{ep.title}</div>
 
-      <audio controls preload="none" src={audioUrl(ep)} className="mb-4 w-full" />
+      <Player src={audioUrl(ep)} />
 
       <button onClick={() => setShowWords(s => !s)} className="mb-3 text-sm font-medium" style={{ color: 'var(--blue)' }}>
         {showWords ? 'Wortliste ausblenden ▴' : 'Wortliste mit Übersetzung ▾'}
