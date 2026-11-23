@@ -21,10 +21,10 @@ export const PODCAST_EPISODES = [
   },
   {
     id: 2,
-    title: 'Le passé composé (B) – Le tablier de Mamie Odile',
+    title: 'Le passé composé (B) – Le grenier de Mamie Odile',
     tense: 'Passé composé',
     formId: 'passe-compose',
-    audio: 'podcast/folge_02.mp3',
+    audio: 'podcast/folge_02_v2.mp3',
     words: [
       'repérer', "s'entrechoquer", "s'étirer", 'crocheter', 'somnoler', 'vomir', 'se redresser',
       'le chancre', "l'accès de colère", 'le don', 'le tablier', 'le recoin', 'le deuil', 'le tarin',
