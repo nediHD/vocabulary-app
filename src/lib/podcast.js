@@ -32,6 +32,19 @@ export const PODCAST_EPISODES = [
       "ne pas avoir l'air dans son assiette", 'tenir la route', 'être à côté de la plaque', 'au fil de',
     ],
   },
+  {
+    id: 3,
+    title: 'Le passé composé (C) – La valise de Tonton Félix',
+    tense: 'Passé composé',
+    formId: 'passe-compose',
+    audio: 'podcast/folge_03.mp3',
+    words: [
+      "s'emporter", 'enserrer', 'chanceler', 'contourner', 'grogner', 'râler contre', 'se déchaîner', 'talonner',
+      'la peine', 'la trousse de toilette', 'la prise de vue', 'le fer forgé', 'le toutou', "l'accoudoir", 'le gâchis',
+      'interminable', 'verni', 'morne', 'ridé', 'accusateur',
+      'défaire sa valise', 'avec préméditation', 'ne pas faire long feu',
+    ],
+  },
 ]
 
 export function episodeById(id) {
