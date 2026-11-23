@@ -93,7 +93,12 @@ export default function SentenceLearning({ setView, setInSession, episode = null
       if (episode) {
         // Podcast-Übung: alle Wörter der Folge, egal ob gerade fällig
         try {
-          dueCards = await fetchEpisodeCards(episode)
+          const nowMs = new Date(now).getTime()
+          // _practice = Wort ist (noch) nicht fällig -> nur Übung, ohne Zählung (keine Termin-Änderung)
+          dueCards = (await fetchEpisodeCards(episode)).map(c => ({
+            ...c,
+            _practice: !(c.next_review_at && new Date(c.next_review_at).getTime() <= nowMs),
+          }))
         } catch (e) {
           setError('Fehler beim Laden der Wörter: ' + e.message)
           return
@@ -256,9 +261,9 @@ export default function SentenceLearning({ setView, setInSession, episode = null
         if (newCount >= needed) {
           newPills[pillIdx].color = 'dark-green'
           setReviewPills(newPills)
-          showReviewDays(card._hadError ? card.interval_days : card.interval_days * 2)
+          if (!card._practice) showReviewDays(card._hadError ? card.interval_days : card.interval_days * 2)
 
-          if (!card._hadError) {
+          if (!card._hadError && !card._practice) {
             const newInterval = card.interval_days * 2
             const nextReviewAt = new Date()
             nextReviewAt.setDate(nextReviewAt.getDate() + newInterval)
@@ -289,10 +294,12 @@ export default function SentenceLearning({ setView, setInSession, episode = null
       } else {
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + 1)
-        await supabase
-          .from('cards')
-          .update({ interval_days: 1, next_review_at: nextReviewAt.toISOString() })
-          .eq('id', card.id)
+        if (!card._practice) {
+          await supabase
+            .from('cards')
+            .update({ interval_days: 1, next_review_at: nextReviewAt.toISOString() })
+            .eq('id', card.id)
+        }
 
         newPills[pillIdx].color = 'red'
         setReviewPills(newPills)
